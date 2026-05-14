@@ -106,9 +106,9 @@ if tipo == 'promedio':
     emoji     = '⏱️'
     estado_txt = f'PROM: {pct_t:.2f} {unidad}'
 elif tipo == 'tasa':
-    color      = 'rojo'
+    color      = 'verde' if pct_t > 0 else 'rojo'
     emoji      = '📊'
-    estado_txt = f'TASA: {pct_t:.1f}'
+    estado_txt = f'TASA: {pct_t:.1f} x10k'
 else:
     color      = get_semaforo_color(pct_t, logro)
     emoji      = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
@@ -140,8 +140,9 @@ if tipo == 'promedio':
     m3.metric(f'Promedio ({unidad})', f'{pct_t:.2f} {unidad}')
     m4.metric('Referidos totales', f'{den_t:,}')
 elif tipo == 'tasa':
-    m3.metric('Tasa', f'{pct_t:.2f}')
-    m4.metric('Establecimientos', f'{df_f["eess"].nunique() if "eess" in df_f.columns else "-"}')
+    m3.metric('Tasa (×10,000)', f'{pct_t:.2f}')
+    n_eess = df_f['eess'].nunique() if 'eess' in df_f.columns else 0
+    m4.metric('Establecimientos', f'{n_eess:,}')
 else:
     m3.metric('% Avance', f'{pct_t*100:.1f}%')
     pendientes = den_t - num_t
@@ -203,8 +204,8 @@ with tabs[0]:
                 tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
             col_cfg = {f'Promedio ({unidad})': st.column_config.NumberColumn(format='%.2f')}
         elif tipo == 'tasa':
-            tbl['Tasa'] = np.where(tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
-            col_cfg = {'Tasa': st.column_config.NumberColumn(format='%.2f')}
+            tbl['Tasa (×10k)'] = np.where(tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
+            col_cfg = {'Tasa (×10k)': st.column_config.NumberColumn(format='%.2f')}
         else:
             tbl['% Avance'] = np.where(tbl['DEN'] > 0,
                                        (tbl['NUM']/tbl['DEN']*100).round(1), 0)

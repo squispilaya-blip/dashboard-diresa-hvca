@@ -27,12 +27,12 @@ def kpi_card_html(icono: str, titulo: str, pct: float,
         emoji    = '⏱️'
         color    = 'sin_data' if color not in SEMAFORO else color
     elif tipo == 'tasa':
-        pct_str  = f'{pct:.1f}'
-        meta_str = 'Tasa de uso'
+        pct_str  = f'{pct:.1f} ×10k'
+        meta_str = 'Tasa ponderada de telemedicina'
         bar_w    = 0
         bar_color = '#4a5568'
         emoji    = '📊'
-        color    = 'sin_data' if color not in SEMAFORO else color
+        color    = color if color in SEMAFORO else 'rojo'
     else:
         pct_str  = f'{pct*100:.1f}%'
         meta_str = f'Meta: {logro*100:.0f}%' if logro else 'Sin meta definida'
@@ -169,13 +169,22 @@ def bar_chart_por_eess(df: pd.DataFrame, titulo: str,
     agg = agg[agg[col].str.len() > 0]
 
     if tipo == 'promedio':
-        # Para promedio: ordenar de menor a mayor (menor espera = mejor)
+        # Para promedio: menor espera = mejor → ordenar descendente para visualizar
         agg = agg.sort_values('pct', ascending=False).tail(20)
-        bar_colors = ['#4a85c0'] * len(agg)   # azul neutro
+        bar_colors = ['#4a85c0'] * len(agg)
         text_vals  = [f'{p:.2f} {unidad}' for p in agg['pct']]
         x_title    = f'Promedio ({unidad})'
         x_range    = [0, agg['pct'].max() * 1.2 + 0.5]
         hover_tmpl = f'<b>%{{y}}</b><br>Promedio: %{{x:.2f}} {unidad}<extra></extra>'
+        vline_x    = None
+    elif tipo == 'tasa':
+        # Tasa ponderada × 10,000 — mayor es mejor
+        agg = agg.sort_values('pct').tail(20)
+        bar_colors = ['#7b5ea7'] * len(agg)   # morado neutro
+        text_vals  = [f'{p:.1f}' for p in agg['pct']]
+        x_title    = 'Tasa (×10,000)'
+        x_range    = [0, agg['pct'].max() * 1.2 + 1]
+        hover_tmpl = '<b>%{y}</b><br>Tasa: %{x:.1f} ×10k<extra></extra>'
         vline_x    = None
     else:
         agg = agg.sort_values('pct').tail(20)

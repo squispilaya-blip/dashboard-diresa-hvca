@@ -34,7 +34,12 @@ INDICADORES = {
     '25': {'nombre': 'Espera Atención Referido',     'logro_default': None, 'icono': '⏱️',
            'tipo': 'promedio', 'unidad': 'hrs'},   # num/den = promedio horas de espera
     '32': {'nombre': 'Telemedicina',                 'logro_default': None, 'icono': '📱',
-           'tipo': 'tasa'},                         # tasa especial, no porcentaje simple
+           'tipo': 'tasa', 'unidad': 'x10k',
+           # num = (TeleInterconsulta×6/4 + TeleConsulta×1/3 + TeleMonitoreo×30/72)×10000
+           # den = PoblacionAsignada (1er nivel) o Atenciones (2do/3er nivel)
+           # TASA = num/den  (ponderada × 10,000)
+           # El sheet1 mezcla 'Indicador A' (EESS) y 'Poblacion B' (ref); usar solo Indicador A
+           'sheet_filter': {'col': 'Indicador', 'val': 'Indicador A'}},
 }
 
 # Mapeo: columna estándar → variantes encontradas en los 16 Excel

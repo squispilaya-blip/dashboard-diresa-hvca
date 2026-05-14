@@ -100,6 +100,14 @@ def load_ficha(file, filename: str) -> dict | None:
             return None
     if logro is None:
         logro = meta.get('logro_default')
+
+    # Filtro específico por ficha (ej. Ficha 32: solo filas 'Indicador A')
+    sheet_filter = meta.get('sheet_filter')
+    if sheet_filter:
+        fcol, fval = sheet_filter.get('col'), sheet_filter.get('val')
+        if fcol and fcol in df.columns:
+            df = df[df[fcol] == fval].copy()
+
     df_norm = normalize_df(df, ficha_id)
     tipo   = meta.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
     unidad = meta.get('unidad', '%')      # '%' | 'hrs' | etc.
