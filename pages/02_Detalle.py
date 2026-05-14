@@ -46,6 +46,14 @@ def _limpiar_opciones(serie):
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
+    st.markdown('''<div style="text-align:center;padding:10px 0 14px 0;
+        border-bottom:1px solid rgba(255,255,255,0.18);margin-bottom:14px">
+      <div style="font-size:2.2rem">🏥</div>
+      <div style="color:white;font-weight:800;font-size:0.95rem;line-height:1.3">
+        DIRESA<br>HUANCAVELICA</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:0.6rem;margin-top:3px">
+        DL 1153 · 2026</div>
+    </div>''', unsafe_allow_html=True)
     st.markdown('### 🔍 Indicador')
     fid = st.selectbox(
         'Seleccionar indicador:',
@@ -135,16 +143,22 @@ tabs = st.tabs(tab_labels)
 with tabs[0]:
     col_map, col_bar = st.columns([1, 1])
 
+    # Renderizar mapa una sola vez (reutilizado en pantalla y PDF)
+    _map_bytes = None
+    try:
+        _map_bytes = render_map(df_f, logro)
+    except Exception:
+        pass
+
     with col_map:
         st.markdown('<div class="seccion-titulo">🗺️ Mapa por Red / Provincia</div>',
                     unsafe_allow_html=True)
-        try:
-            img_bytes = render_map(df_f, logro)
+        if _map_bytes:
             st.markdown('<div class="mapa-container">', unsafe_allow_html=True)
-            st.image(img_bytes, use_container_width=True)
+            st.image(_map_bytes, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.warning(f'No se pudo renderizar el mapa: {e}')
+        else:
+            st.warning('No se pudo renderizar el mapa.')
 
     with col_bar:
         st.markdown('<div class="seccion-titulo">📊 Avance por Establecimiento</div>',
@@ -162,7 +176,8 @@ with tabs[0]:
     if grp and not df_f.empty:
         tbl = (df_f.groupby([grp, 'mes'])
                    .agg(den=('den','sum'), num=('num','sum'))
-                   .reset_index())
+                   .reset_index()
+                   .sort_values(['mes', grp]))          # ← orden por mes
         tbl['% Avance'] = np.where(tbl['den'] > 0,
                                    (tbl['num']/tbl['den']*100).round(1), 0)
         tbl['Meta'] = logro_str
@@ -174,6 +189,9 @@ with tabs[0]:
         tbl['Mes'] = tbl['mes'].map(MESES)
         tbl = tbl.drop(columns=['mes'])
         tbl = tbl.rename(columns={grp: grp.upper(), 'den': 'DEN', 'num': 'NUM'})
+        # Reordenar columnas: Mes primero
+        cols_order = ['Mes'] + [c for c in tbl.columns if c != 'Mes']
+        tbl = tbl[cols_order]
         st.dataframe(tbl, use_container_width=True, hide_index=True,
                      column_config={'% Avance': st.column_config.NumberColumn(format='%.1f%%'),
                                     'Estado': st.column_config.TextColumn(width='medium')})
@@ -196,7 +214,8 @@ with tabs[0]:
         st.download_button(
             '📄 Descargar PDF',
             data=build_pdf_bytes(df_f, ficha['titulo'], filtro_lbl,
-                                 logro_str, 'ENERO - ABRIL 2026'),
+                                 logro_str, 'ENERO - ABRIL 2026',
+                                 map_bytes=_map_bytes),
             file_name=f'Ficha{fid}_{red_sel.replace(" ","_")}.pdf',
             mime='application/pdf',
             use_container_width=True,
@@ -209,7 +228,10 @@ if has_pacientes:
                     unsafe_allow_html=True)
         st.caption('Pacientes que **aún no han cumplido** el indicador (num = 0) para el filtro actual.')
 
-        df_pend = df_f[df_f['num'] == 0].copy()
+        # Ordenar por mes, red, establecimiento desde el inicio
+        df_pend = (df_f[df_f['num'] == 0]
+                   .sort_values([c for c in ['mes', 'red', 'eess'] if c in df_f.columns])
+                   .copy())
 
         # ── Buscador en tiempo real ────────────────────────────────────────
         buscar = st.text_input('🔍 Buscar por N° Documento o Nombre',
@@ -253,18 +275,20 @@ if has_pacientes:
         if df_pend.empty:
             st.success('🎉 No hay pacientes pendientes para este filtro.')
         else:
+            # df_pend ya está ordenado por mes/red/eess — construir df_disp igual
             df_disp = df_pend[SHOW].rename(columns=RENAME).copy()
             if 'Mes' in df_disp.columns:
                 df_disp['Mes'] = df_disp['Mes'].map(MESES)
             for col in df_disp.select_dtypes(include='object').columns:
-                df_disp[col] = df_disp[col].replace({'NAN': '', 'nan': '', '': '—'})
+                df_disp[col] = df_disp[col].replace({'NAN': '', 'nan': ''})
 
             st.dataframe(df_disp, use_container_width=True, hide_index=True, height=420)
 
+            # Descarga = exactamente lo que se ve en pantalla (mismo orden, mismas columnas)
             st.download_button(
                 '📥 Descargar lista de pendientes (Excel)',
                 data=df_to_excel_bytes(
-                    df_pend[SHOW].rename(columns=RENAME),
+                    df_disp,                             # usar df_disp ya procesado
                     f'Pendientes — {ficha["titulo"]}',
                     filtro_lbl,
                 ),

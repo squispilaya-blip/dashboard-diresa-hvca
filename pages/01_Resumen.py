@@ -26,6 +26,14 @@ _EXCLUIR_RED = {'NAN', 'NONE', 'N/A', 'NA', '0', '0.0', '', 'ROJO', 'VERDE',
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
+    st.markdown('''<div style="text-align:center;padding:10px 0 14px 0;
+        border-bottom:1px solid rgba(255,255,255,0.18);margin-bottom:14px">
+      <div style="font-size:2.2rem">🏥</div>
+      <div style="color:white;font-weight:800;font-size:0.95rem;line-height:1.3">
+        DIRESA<br>HUANCAVELICA</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:0.6rem;margin-top:3px">
+        DL 1153 · 2026</div>
+    </div>''', unsafe_allow_html=True)
     st.markdown('### 🌐 Filtro de Red')
     redes_disp = sorted({r for f in fichas.values()
                          for r in f['df']['red'].unique()
