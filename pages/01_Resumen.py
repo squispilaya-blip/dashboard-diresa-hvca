@@ -1,3 +1,4 @@
+
 from datetime import datetime
 import streamlit as st
 import os, sys
@@ -5,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loader import get_semaforo_color
 from utils.charts import kpi_card_html
 from utils.map_renderer import render_map
+from utils.constants import EXCLUIR_OPCIONES
 
 st.set_page_config(page_title='Resumen General', page_icon='📊', layout='wide')
 
@@ -21,9 +23,6 @@ if not st.session_state.get('fichas'):
 
 fichas = st.session_state.fichas
 
-_EXCLUIR_RED = {'NAN', 'NONE', 'N/A', 'NA', '0', '0.0', '', 'ROJO', 'VERDE',
-                'AMARILLO', 'AZUL', 'NULL', '#N/A'}
-
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('''<div style="text-align:center;padding:10px 0 14px 0;
@@ -37,7 +36,7 @@ with st.sidebar:
     st.markdown('### 🌐 Filtro de Red')
     redes_disp = sorted({r for f in fichas.values()
                          for r in f['df']['red'].unique()
-                         if r and len(r) > 1 and r.upper() not in _EXCLUIR_RED})
+                         if r and len(r) > 1 and r.upper() not in EXCLUIR_OPCIONES})
     red_filtro = st.selectbox('Red de Salud / Provincia',
                               ['Todas'] + redes_disp)
 

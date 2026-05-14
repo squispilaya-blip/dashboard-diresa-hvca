@@ -4,10 +4,10 @@ import numpy as np
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loader import get_semaforo_color
-from utils.charts import bar_chart_por_eess, donut_chart
+from utils.charts import bar_chart_por_eess
 from utils.map_renderer import render_map
 from utils.exports import df_to_excel_bytes, build_pdf_bytes
-from utils.constants import MESES
+from utils.constants import MESES, EXCLUIR_OPCIONES
 
 st.set_page_config(page_title='Detalle por Indicador', page_icon='🔍', layout='wide')
 
@@ -31,15 +31,12 @@ if st.session_state.get('selected_ficha') in ids:
     default_idx = ids.index(st.session_state.selected_ficha)
 
 
-_EXCLUIR = {'NAN', 'NONE', 'N/A', 'NA', '0', '0.0', '', 'ROJO', 'VERDE',
-             'AMARILLO', 'AZUL', 'NARANJA', 'GRIS', 'NULL', '#N/A', '#VALUE!'}
-
 def _limpiar_opciones(serie):
     """Retorna lista limpia sin NAN/vacíos/colores semáforo/nulos, ordenada."""
     vals = set()
     for v in serie.unique():
         v = str(v).strip()
-        if v.upper() not in _EXCLUIR:
+        if v.upper() not in EXCLUIR_OPCIONES:
             vals.add(v)
     return sorted(vals)
 

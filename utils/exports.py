@@ -27,10 +27,21 @@ def df_to_excel_bytes(df: pd.DataFrame, titulo: str, filtro: str) -> bytes:
 
     ws['A1'] = f'DIRESA HUANCAVELICA — {titulo}'
     ws['A1'].font = Font(bold=True, color='003087', size=13)
-    ws['A2'] = f'Filtro: {filtro}  |  PERIODO: ENERO - ABRIL 2026'
+    # MINOR-6: derivar periodo de los datos reales
+    if not df.empty and 'mes' in df.columns:
+        meses_datos = sorted(df['mes'].dropna().unique().astype(int))
+        if meses_datos:
+            m_ini = MESES_PDF.get(meses_datos[0], str(meses_datos[0])).upper()
+            m_fin = MESES_PDF.get(meses_datos[-1], str(meses_datos[-1])).upper()
+            periodo_excel = f'{m_ini} - {m_fin} 2026' if m_ini != m_fin else f'{m_ini} 2026'
+        else:
+            periodo_excel = '2026'
+    else:
+        periodo_excel = '2026'
+    ws['A2'] = f'Filtro: {filtro}  |  PERIODO: {periodo_excel}'
     ws['A2'].font = Font(italic=True, color='444444', size=10)
 
-    max_col = max(8, 1)
+    max_col = max(len(df.columns), 1)   # MINOR-7: usar ancho real del df
     ws.merge_cells(f'A1:{get_column_letter(max_col)}1')
     ws.merge_cells(f'A2:{get_column_letter(max_col)}2')
     ws.row_dimensions[3].height = 5

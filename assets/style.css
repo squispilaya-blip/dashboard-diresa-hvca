@@ -1,17 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
-/* Aplicar Inter a todo EXCEPTO íconos de Material */
-*:not(.material-icons):not(.material-icons-round):not([class*="material"]) {
+/* Aplicar Inter a todo el contenido */
+* {
     font-family: 'Inter', sans-serif !important;
 }
 
-/* Restaurar Material Icons para los botones del sidebar de Streamlit */
+/* Restaurar Material Icons — especificidad [0,1,1] > [0,0,0] del * anterior */
 .material-icons, .material-icons-round, .material-icons-outlined,
 [data-testid="stSidebarCollapseButton"] span,
+[data-testid="stSidebarCollapseButton"] > *,
 [data-testid="collapsedControl"] span,
-button[kind="header"] span {
-    font-family: 'Material Icons', 'Material Icons Round' !important;
+[data-testid="collapsedControl"] > *,
+button[kind="header"] span,
+button[aria-expanded] > span {
+    font-family: 'Material Icons Round', 'Material Icons' !important;
     font-feature-settings: 'liga' !important;
     -webkit-font-feature-settings: 'liga' !important;
     font-size: 24px !important;

@@ -37,7 +37,7 @@ INDICADORES = {
 
 # Mapeo: columna estándar → variantes encontradas en los 16 Excel
 COLUMN_MAP = {
-    'año':       ['año', 'Año', 'anio', 'Anio', 'a�о'],
+    'año':       ['año', 'Año', 'anio', 'Anio', 'año'],
     'mes':       ['mes', 'Mes', 'mes_eva'],
     'provincia': ['Provincia', 'PROVINCIA', 'Prov', 'DESC_DPTO'],
     'red':       ['Red', 'RED', 'red'],
@@ -71,3 +71,11 @@ MESES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
          7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'}
 MESES_CORTO = {1:'Ene',2:'Feb',3:'Mar',4:'Abr',5:'May',6:'Jun',
                7:'Jul',8:'Ago',9:'Sep',10:'Oct',11:'Nov',12:'Dic'}
+
+# IMPORTANT-5: Conjunto compartido para limpiar opciones de dropdowns
+# Excluye NaN, vacíos, colores de semáforo y valores nulos de Excel
+EXCLUIR_OPCIONES = {
+    'NAN', 'NONE', 'N/A', 'NA', '0', '0.0', '', 'NULL',
+    '#N/A', '#VALUE!', '#REF!', '#NAME?',
+    'ROJO', 'VERDE', 'AMARILLO', 'AZUL', 'NARANJA', 'GRIS',
+}

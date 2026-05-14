@@ -80,10 +80,24 @@ def load_ficha(file, filename: str) -> dict | None:
     except Exception:
         logro = None
         titulo = meta.get('nombre', f'Indicador {ficha_id}')
-    try:
-        df = pd.read_excel(file, sheet_name='sheet1')
-    except Exception:
-        return None
+    # CRITICAL-2: intentar varios nombres de hoja de datos
+    _SHEET_CANDIDATES = ['sheet1', 'Sheet1', 'SHEET1', 'Hoja2', 'hoja2',
+                         'datos', 'Datos', 'DATOS', 'data', 'Data']
+    df = None
+    for _sheet in _SHEET_CANDIDATES:
+        try:
+            file.seek(0)
+            df = pd.read_excel(file, sheet_name=_sheet)
+            break
+        except Exception:
+            continue
+    if df is None:
+        # último recurso: leer la segunda hoja por índice
+        try:
+            file.seek(0)
+            df = pd.read_excel(file, sheet_name=1)
+        except Exception:
+            return None
     if logro is None:
         logro = meta.get('logro_default')
     df_norm = normalize_df(df, ficha_id)
