@@ -62,6 +62,8 @@ with st.sidebar:
     ficha = fichas[fid]
     df_base = ficha['df'].copy()
     logro, logro_str = ficha.get('logro'), ficha.get('logro_str', 'N/D')
+    tipo   = ficha.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
+    unidad = ficha.get('unidad', '%')
 
     st.markdown('---')
     st.markdown('### 🎯 Filtros')
@@ -99,9 +101,18 @@ df_f = df_f[df_f['mes'].isin(meses_sel)]
 den_t = int(df_f['den'].sum())
 num_t = int(df_f['num'].sum())
 pct_t = num_t / den_t if den_t > 0 else 0
-color = get_semaforo_color(pct_t, logro)
-emoji = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
-estado_txt = 'EN META' if color == 'verde' else ('CERCA DE META' if color == 'amarillo' else 'POR DEBAJO')
+if tipo == 'promedio':
+    color     = 'rojo'      # sin semáforo real; usar neutro
+    emoji     = '⏱️'
+    estado_txt = f'PROM: {pct_t:.2f} {unidad}'
+elif tipo == 'tasa':
+    color      = 'rojo'
+    emoji      = '📊'
+    estado_txt = f'TASA: {pct_t:.1f}'
+else:
+    color      = get_semaforo_color(pct_t, logro)
+    emoji      = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
+    estado_txt = 'EN META' if color == 'verde' else ('CERCA DE META' if color == 'amarillo' else 'POR DEBAJO')
 
 now = datetime.now()
 fecha_txt = now.strftime('%d/%m/%Y %H:%M:%S')
@@ -125,11 +136,18 @@ st.markdown(f"""<div class="header-diresa">
 m1, m2, m3, m4 = st.columns(4)
 m1.metric('Denominador', f'{den_t:,}')
 m2.metric('Numerador',   f'{num_t:,}')
-m3.metric('% Avance',    f'{pct_t*100:.1f}%')
-pendientes = den_t - num_t
-m4.metric('Pendientes',  f'{max(0, pendientes):,}',
-          delta=f'{abs(pendientes/den_t*100):.1f}% restante' if den_t > 0 else None,
-          delta_color='inverse')
+if tipo == 'promedio':
+    m3.metric(f'Promedio ({unidad})', f'{pct_t:.2f} {unidad}')
+    m4.metric('Referidos totales', f'{den_t:,}')
+elif tipo == 'tasa':
+    m3.metric('Tasa', f'{pct_t:.2f}')
+    m4.metric('Establecimientos', f'{df_f["eess"].nunique() if "eess" in df_f.columns else "-"}')
+else:
+    m3.metric('% Avance', f'{pct_t*100:.1f}%')
+    pendientes = den_t - num_t
+    m4.metric('Pendientes', f'{max(0, pendientes):,}',
+              delta=f'{abs(pendientes/den_t*100):.1f}% restante' if den_t > 0 else None,
+              delta_color='inverse')
 
 # ── Tabs: Análisis | Pacientes ────────────────────────────────────────────────
 has_pacientes = ficha['has_numdoc'] or ficha['has_nombres']
@@ -161,7 +179,8 @@ with tabs[0]:
         st.markdown('<div class="seccion-titulo">📊 Avance por Establecimiento</div>',
                     unsafe_allow_html=True)
         st.plotly_chart(
-            bar_chart_por_eess(df_f, 'Por Establecimiento / Red', logro),
+            bar_chart_por_eess(df_f, 'Por Establecimiento / Red', logro,
+                               tipo=tipo, unidad=unidad),
             use_container_width=True,
         )
 
@@ -174,24 +193,34 @@ with tabs[0]:
         tbl = (df_f.groupby([grp, 'mes'])
                    .agg(den=('den','sum'), num=('num','sum'))
                    .reset_index()
-                   .sort_values(['mes', grp]))          # ← orden por mes
-        tbl['% Avance'] = np.where(tbl['den'] > 0,
-                                   (tbl['num']/tbl['den']*100).round(1), 0)
-        tbl['Meta'] = logro_str
-        tbl['Pendiente'] = (tbl['den'] - tbl['num']).clip(lower=0)
-        tbl['Estado'] = tbl['% Avance'].apply(
-            lambda p: '🟢 En meta' if (logro and p/100 >= logro)
-                      else ('🟡 Cerca' if (logro and p/100 >= logro * 0.8) else '🔴 Bajo')
-        )
+                   .sort_values(['mes', grp]))
         tbl['Mes'] = tbl['mes'].map(MESES)
         tbl = tbl.drop(columns=['mes'])
         tbl = tbl.rename(columns={grp: grp.upper(), 'den': 'DEN', 'num': 'NUM'})
-        # Reordenar columnas: Mes primero
+
+        if tipo == 'promedio':
+            tbl[f'Promedio ({unidad})'] = np.where(
+                tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
+            col_cfg = {f'Promedio ({unidad})': st.column_config.NumberColumn(format='%.2f')}
+        elif tipo == 'tasa':
+            tbl['Tasa'] = np.where(tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
+            col_cfg = {'Tasa': st.column_config.NumberColumn(format='%.2f')}
+        else:
+            tbl['% Avance'] = np.where(tbl['DEN'] > 0,
+                                       (tbl['NUM']/tbl['DEN']*100).round(1), 0)
+            tbl['Meta']      = logro_str
+            tbl['Pendiente'] = (tbl['DEN'] - tbl['NUM']).clip(lower=0)
+            tbl['Estado']    = tbl['% Avance'].apply(
+                lambda p: '🟢 En meta' if (logro and p/100 >= logro)
+                          else ('🟡 Cerca' if (logro and p/100 >= logro * 0.8) else '🔴 Bajo')
+            )
+            col_cfg = {'% Avance': st.column_config.NumberColumn(format='%.1f%%'),
+                       'Estado': st.column_config.TextColumn(width='medium')}
+
         cols_order = ['Mes'] + [c for c in tbl.columns if c != 'Mes']
         tbl = tbl[cols_order]
         st.dataframe(tbl, use_container_width=True, hide_index=True,
-                     column_config={'% Avance': st.column_config.NumberColumn(format='%.1f%%'),
-                                    'Estado': st.column_config.TextColumn(width='medium')})
+                     column_config=col_cfg)
     elif df_f.empty:
         st.info('Sin datos para los filtros seleccionados.')
 

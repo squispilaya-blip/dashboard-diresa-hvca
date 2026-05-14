@@ -146,7 +146,8 @@ for i in range(0, len(ids), 4):
         color = get_semaforo_color(pct, f.get('logro'))
         with cols[j]:
             st.markdown(
-                kpi_card_html(f['icono'], f['titulo'][:34], pct, f.get('logro'), color),
+                kpi_card_html(f['icono'], f['titulo'][:34], pct, f.get('logro'), color,
+                              tipo=f.get('tipo', 'pct'), unidad=f.get('unidad', '%')),
                 unsafe_allow_html=True,
             )
             if st.button(f'📋 Ver detalle', key=f'btn_{fid}', use_container_width=True):

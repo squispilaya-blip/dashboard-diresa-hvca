@@ -101,12 +101,16 @@ def load_ficha(file, filename: str) -> dict | None:
     if logro is None:
         logro = meta.get('logro_default')
     df_norm = normalize_df(df, ficha_id)
+    tipo   = meta.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
+    unidad = meta.get('unidad', '%')      # '%' | 'hrs' | etc.
     return {
         'id':         ficha_id,
         'titulo':     titulo or meta.get('nombre', f'Indicador {ficha_id}'),
         'logro':      logro,
         'logro_str':  f'{logro*100:.0f}%' if logro else 'N/D',
         'icono':      meta.get('icono', '📊'),
+        'tipo':       tipo,
+        'unidad':     unidad,
         'df':         df_norm,
         'has_nombres': df_norm['nombres'].str.len().gt(0).any(),
         'has_numdoc':  df_norm['num_doc'].str.len().gt(0).any(),

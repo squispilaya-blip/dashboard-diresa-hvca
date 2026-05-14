@@ -31,8 +31,10 @@ INDICADORES = {
     '16': {'nombre': 'Vacuna VPH',                   'logro_default': 0.90, 'icono': '💉'},
     '17': {'nombre': 'Discapacidad <5 años',         'logro_default': 0.30, 'icono': '♿'},
     '19': {'nombre': 'Depresión',                    'logro_default': None, 'icono': '🧠'},
-    '25': {'nombre': 'Espera Atención Referido',     'logro_default': None, 'icono': '⏱️'},
-    '32': {'nombre': 'Telemedicina',                 'logro_default': None, 'icono': '📱'},
+    '25': {'nombre': 'Espera Atención Referido',     'logro_default': None, 'icono': '⏱️',
+           'tipo': 'promedio', 'unidad': 'hrs'},   # num/den = promedio horas de espera
+    '32': {'nombre': 'Telemedicina',                 'logro_default': None, 'icono': '📱',
+           'tipo': 'tasa'},                         # tasa especial, no porcentaje simple
 }
 
 # Mapeo: columna estándar → variantes encontradas en los 16 Excel

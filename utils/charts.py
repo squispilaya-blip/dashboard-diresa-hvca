@@ -17,13 +17,31 @@ def _layout_base(title: str, height: int = 340) -> dict:
 
 
 def kpi_card_html(icono: str, titulo: str, pct: float,
-                  logro: float | None, color: str) -> str:
-    pct_str = f'{pct*100:.1f}%'
-    meta_str = f'Meta: {logro*100:.0f}%' if logro else 'Sin meta definida'
-    bar_w = min(100, int(pct * 100))
-    bar_color = SEMAFORO[color]
-    emoji = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
-    return f"""<div class="kpi-card {color}">
+                  logro: float | None, color: str,
+                  tipo: str = 'pct', unidad: str = '%') -> str:
+    if tipo == 'promedio':
+        pct_str  = f'{pct:.2f} {unidad}'
+        meta_str = 'Promedio de espera'
+        bar_w    = 0          # sin barra de progreso
+        bar_color = '#4a5568'
+        emoji    = '⏱️'
+        color    = 'sin_data' if color not in SEMAFORO else color
+    elif tipo == 'tasa':
+        pct_str  = f'{pct:.1f}'
+        meta_str = 'Tasa de uso'
+        bar_w    = 0
+        bar_color = '#4a5568'
+        emoji    = '📊'
+        color    = 'sin_data' if color not in SEMAFORO else color
+    else:
+        pct_str  = f'{pct*100:.1f}%'
+        meta_str = f'Meta: {logro*100:.0f}%' if logro else 'Sin meta definida'
+        bar_w    = min(100, int(pct * 100))
+        bar_color = SEMAFORO.get(color, '#4a5568')
+        emoji    = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
+
+    card_color = color if color in ('verde', 'amarillo', 'rojo') else 'rojo'
+    return f"""<div class="kpi-card {card_color}">
   <div class="kpi-icono">{icono}&nbsp;{emoji}</div>
   <div class="kpi-titulo">{titulo}</div>
   <div class="kpi-valor">{pct_str}</div>
@@ -138,7 +156,8 @@ def scatter_map_provincias(df: pd.DataFrame, logro: float | None,
 
 
 def bar_chart_por_eess(df: pd.DataFrame, titulo: str,
-                       logro: float | None) -> go.Figure:
+                       logro: float | None,
+                       tipo: str = 'pct', unidad: str = '%') -> go.Figure:
     col = next((c for c in ['eess', 'microred', 'red']
                 if c in df.columns and df[c].str.len().gt(0).any()), None)
     if not col or df.empty:
@@ -146,26 +165,46 @@ def bar_chart_por_eess(df: pd.DataFrame, titulo: str,
     agg = (df.groupby(col)
              .agg(den=('den', 'sum'), num=('num', 'sum'))
              .reset_index())
-    agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'] * 100, 0)
-    agg = agg[agg[col].str.len() > 0].sort_values('pct').tail(20)
-    thr = (logro or 0) * 100
-    colors = [SEMAFORO['verde'] if p >= thr
-              else SEMAFORO['amarillo'] if thr > 0 and p >= thr * 0.8
-              else SEMAFORO['rojo'] for p in agg['pct']]
+    agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'], 0)
+    agg = agg[agg[col].str.len() > 0]
+
+    if tipo == 'promedio':
+        # Para promedio: ordenar de menor a mayor (menor espera = mejor)
+        agg = agg.sort_values('pct', ascending=False).tail(20)
+        bar_colors = ['#4a85c0'] * len(agg)   # azul neutro
+        text_vals  = [f'{p:.2f} {unidad}' for p in agg['pct']]
+        x_title    = f'Promedio ({unidad})'
+        x_range    = [0, agg['pct'].max() * 1.2 + 0.5]
+        hover_tmpl = f'<b>%{{y}}</b><br>Promedio: %{{x:.2f}} {unidad}<extra></extra>'
+        vline_x    = None
+    else:
+        agg = agg.sort_values('pct').tail(20)
+        pcts_pct   = agg['pct'] * 100
+        thr        = (logro or 0) * 100
+        bar_colors = [SEMAFORO['verde'] if p >= thr
+                      else SEMAFORO['amarillo'] if thr > 0 and p >= thr * 0.8
+                      else SEMAFORO['rojo'] for p in pcts_pct]
+        text_vals  = [f'{p:.1f}%' for p in pcts_pct]
+        agg['pct'] = pcts_pct    # convertir a % para el eje
+        x_title    = '% Avance'
+        x_range    = [0, 120]
+        hover_tmpl = '<b>%{y}</b><br>%{x:.1f}%<extra></extra>'
+        vline_x    = thr if logro else None
+
     fig = go.Figure(go.Bar(
         x=agg['pct'], y=agg[col], orientation='h',
-        marker_color=colors,
-        text=[f'{p:.1f}%' for p in agg['pct']],
+        marker_color=bar_colors,
+        text=text_vals,
         textposition='outside',
-        hovertemplate='<b>%{y}</b><br>%{x:.1f}%<extra></extra>',
+        hovertemplate=hover_tmpl,
     ))
-    if logro:
-        fig.add_vline(x=thr, line_dash='dash', line_color=COLORS['accent'],
-                      annotation_text=f'Meta {thr:.0f}%',
+    if vline_x:
+        fig.add_vline(x=vline_x, line_dash='dash', line_color=COLORS['accent'],
+                      annotation_text=f'Meta {vline_x:.0f}%',
                       annotation_font_color=COLORS['accent'])
     fig.update_layout(
         **_layout_base(titulo, max(300, len(agg) * 34 + 80)),
-        xaxis=dict(range=[0, 120], gridcolor='rgba(255,255,255,0.08)', title='% Avance'),
+        xaxis=dict(range=x_range, gridcolor='rgba(255,255,255,0.08)', title=x_title),
         yaxis=dict(gridcolor='rgba(255,255,255,0.08)'),
     )
     return fig
