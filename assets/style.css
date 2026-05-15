@@ -80,7 +80,11 @@
     margin: 8px 0;
 }
 
-/* ── Quitar padding superior excesivo del sidebar ─────────────────────── */
+/* ── Ocultar área de logo de Streamlit + quitar padding top del sidebar ── */
+[data-testid="stSidebarLogoDiv"],
+[data-testid="stLogoContainer"],
+[data-testid="stSidebarHeader"]                          { display: none !important; min-height: 0 !important; }
+
 [data-testid="stSidebar"] > div                          { padding-top: 0 !important; margin-top: 0 !important; }
 [data-testid="stSidebar"] > div > div                    { padding-top: 0.5rem !important; margin-top: 0 !important; }
 [data-testid="stSidebarContent"]                         { padding-top: 0 !important; margin-top: 0 !important; }
