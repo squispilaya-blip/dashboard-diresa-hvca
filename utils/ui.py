@@ -30,7 +30,7 @@ def render_sidebar_brand() -> None:
     Muestra el nombre del usuario autenticado desde session_state.
     """
     st.markdown(f'''<div class="sb-brand">
-      <div style="font-size:2rem">🏥</div>
+      <div style="font-size:1.3rem">🏥</div>
       <div class="sb-brand-name">DIRESA<br>HUANCAVELICA</div>
       <div class="sb-brand-sub">DL 1153 · 2026</div>
       <div class="sb-user">👤 {st.session_state.get("user_name", "")}</div>
