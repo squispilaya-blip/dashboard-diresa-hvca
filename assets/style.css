@@ -118,6 +118,14 @@
 .header-diresa h1 { color: #fff; font-size: 1.6rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
 .header-diresa p  { color: rgba(255,255,255,0.82); font-size: 0.87rem; margin: 0; }
 
+/* ── KPI cards: igual altura por fila (stretch) ──────────── */
+[data-testid="stHorizontalBlock"]              { align-items: stretch !important; }
+[data-testid="stColumn"]                       { display: flex !important; flex-direction: column !important; }
+[data-testid="stColumn"] > div                 { flex: 1 !important; display: flex !important; flex-direction: column !important; }
+[data-testid="stColumn"] > div > div          { flex: 1 !important; display: flex !important; flex-direction: column !important; }
+/* El último contenedor antes del markdown debe crecer */
+[data-testid="stColumn"] .stMarkdownContainer { flex: 1 !important; display: flex !important; flex-direction: column !important; }
+
 .kpi-card {
     background: linear-gradient(135deg, #112240, #1a3460);
     border-radius: 12px;
@@ -127,6 +135,11 @@
     margin-bottom: 8px;
     transition: transform 0.18s, box-shadow 0.18s;
     cursor: default;
+    /* Igual altura */
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box;
 }
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(0,0,0,0.40); }
 .kpi-card.rojo    { border-left-color: #E63946; }
@@ -137,7 +150,8 @@
 .kpi-titulo { font-size: 0.65rem; font-weight: 700; color: #8892a4;
               text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
               white-space: normal; word-break: break-word; }
-.kpi-valor  { font-size: 1.7rem; font-weight: 800; color: #E8EAF0; line-height: 1.1; }
+/* Empuja valor/meta/barra al fondo para alinear entre tarjetas */
+.kpi-valor  { font-size: 1.7rem; font-weight: 800; color: #E8EAF0; line-height: 1.1; margin-top: auto; }
 .kpi-meta   { font-size: 0.65rem; color: #6b7a99; margin-top: 2px; }
 .kpi-barra-bg { background: #1e3a5f; border-radius: 3px; height: 5px; margin-top: 8px; overflow: hidden; }
 .kpi-barra    { height: 5px; border-radius: 3px; transition: width 0.6s ease; }
