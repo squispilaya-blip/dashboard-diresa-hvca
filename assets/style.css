@@ -32,20 +32,56 @@ button[aria-expanded] > span {
 [data-testid="stSidebar"] * { color: #E8EAF0 !important; }
 [data-testid="stSidebarNav"] a { color: #E8EAF0 !important; font-weight: 500; }
 
-/* ── LOGO ARRIBA: reordenar sidebar para que el bloque DIRESA
-       aparezca ANTES del menú de páginas auto-generado por Streamlit ── */
-[data-testid="stSidebarContent"] {
-    display: flex !important;
-    flex-direction: column !important;
-    overflow-y: auto !important;
-    height: 100% !important;
+/* ── Ocultar nav automático de Streamlit — usamos st.page_link propio ── */
+[data-testid="stSidebarNav"] { display: none !important; }
+
+/* ── Sidebar compacto: marca DIRESA ──────────────────────────────────── */
+.sb-brand {
+    text-align: center;
+    padding: 14px 0 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.18);
+    margin-bottom: 10px;
 }
-[data-testid="stSidebarNav"] {
-    order: 50 !important;           /* empuja el nav debajo del contenido custom */
-    border-top: 1px solid rgba(255,255,255,0.18) !important;
-    margin-top: 6px !important;
-    padding-top: 6px !important;
+.sb-brand-name {
+    color: white; font-weight: 800; font-size: 0.92rem; line-height: 1.3;
+    margin-top: 4px;
 }
+.sb-brand-sub {
+    color: rgba(255,255,255,0.45); font-size: 0.6rem; margin-top: 2px;
+}
+.sb-user {
+    color: rgba(255,255,255,0.65); font-size: 0.7rem;
+    margin-top: 6px; font-style: italic;
+}
+
+/* ── Sidebar: títulos de sección compactos ────────────────────────────── */
+.sb-nav-title {
+    font-size: 0.62rem !important; font-weight: 700 !important;
+    color: rgba(255,255,255,0.4) !important;
+    text-transform: uppercase; letter-spacing: 0.10em;
+    margin: 8px 0 2px !important; padding: 0 !important;
+}
+.sb-section-title {
+    font-size: 0.62rem !important; font-weight: 700 !important;
+    color: rgba(255,255,255,0.4) !important;
+    text-transform: uppercase; letter-spacing: 0.10em;
+    margin: 10px 0 2px !important; padding: 0 !important;
+}
+.sb-sep {
+    border-top: 1px solid rgba(255,255,255,0.13);
+    margin: 8px 0;
+}
+
+/* ── Reducir espacio en widgets del sidebar ───────────────────────────── */
+[data-testid="stSidebar"] .stSelectbox       { margin-bottom: 2px !important; }
+[data-testid="stSidebar"] .stMultiSelect     { margin-bottom: 2px !important; }
+[data-testid="stSidebar"] div[data-baseweb]  { margin-top: 0 !important; }
+[data-testid="stSidebar"] .stPageLink        { margin: 1px 0 !important; }
+[data-testid="stSidebar"] .stPageLink a      { padding: 5px 8px !important;
+                                               border-radius: 7px !important;
+                                               font-size: 0.85rem !important; }
+[data-testid="stSidebar"] .stPageLink a:hover {
+    background: rgba(255,255,255,0.1) !important; }
 
 .header-diresa {
     background: linear-gradient(90deg, #003087 0%, #00843D 100%);

@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 from utils.loader import load_ficha, get_semaforo_color
+from utils.auth import (do_login, do_logout, is_authenticated, is_admin,
+                        list_users, add_user, delete_user)
 
 st.set_page_config(
     page_title='Dashboard DIRESA Huancavelica',
@@ -15,9 +17,72 @@ def _css():
     if os.path.exists(p):
         with open(p) as f:
             st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-
 _css()
 
+
+# ══════════════════════════════════════════════════════════════════
+#  PANTALLA DE LOGIN
+# ══════════════════════════════════════════════════════════════════
+if not is_authenticated():
+    st.markdown("""
+    <div style="display:flex;justify-content:center;margin-top:60px;">
+      <div style="background:linear-gradient(135deg,#112240,#1a3460);
+                  border-radius:20px;padding:48px 52px;width:420px;
+                  box-shadow:0 12px 48px rgba(0,0,0,0.5);
+                  border:1px solid rgba(255,255,255,0.1);">
+        <div style="text-align:center;margin-bottom:28px;">
+          <div style="font-size:3.2rem">🏥</div>
+          <h2 style="color:#fff;font-weight:800;margin:8px 0 2px;font-size:1.35rem;">
+            DIRESA Huancavelica</h2>
+          <p style="color:rgba(255,255,255,0.5);font-size:0.78rem;margin:0;">
+            Sistema de Monitoreo · DL 1153 · 2026</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.form('login_form', clear_on_submit=False):
+        usuario  = st.text_input('👤 Usuario', placeholder='Ingresa tu usuario')
+        password = st.text_input('🔑 Contraseña', type='password',
+                                 placeholder='Ingresa tu contraseña')
+        submit   = st.form_submit_button('Iniciar sesión', use_container_width=True)
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    if submit:
+        if do_login(usuario.strip(), password):
+            st.success(f'¡Bienvenido, {st.session_state["user_name"]}!')
+            st.rerun()
+        else:
+            st.error('❌ Usuario o contraseña incorrectos.')
+    st.stop()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  USUARIO AUTENTICADO — Sidebar con navegación
+# ══════════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.markdown(f'''<div class="sb-brand">
+      <div style="font-size:2rem">🏥</div>
+      <div class="sb-brand-name">DIRESA<br>HUANCAVELICA</div>
+      <div class="sb-brand-sub">DL 1153 · 2026</div>
+      <div class="sb-user">👤 {st.session_state.get("user_name","")}</div>
+    </div>''', unsafe_allow_html=True)
+
+    st.markdown('<p class="sb-nav-title">NAVEGACIÓN</p>', unsafe_allow_html=True)
+    st.page_link('app.py',              label='🏠 Inicio / Carga')
+    st.page_link('pages/01_Resumen.py', label='📊 Resumen General')
+    st.page_link('pages/02_Detalle.py', label='🔍 Detalle por Indicador')
+
+    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+    if st.button('🚪 Cerrar sesión', use_container_width=True):
+        do_logout()
+        st.rerun()
+
+if 'fichas' not in st.session_state:
+    st.session_state.fichas = {}
+
+# ══════════════════════════════════════════════════════════════════
+#  CABECERA
+# ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="header-diresa">
   <div>
@@ -27,10 +92,68 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-if 'fichas' not in st.session_state:
-    st.session_state.fichas = {}
+# ══════════════════════════════════════════════════════════════════
+#  PANEL DE ADMINISTRACIÓN (solo admin)
+# ══════════════════════════════════════════════════════════════════
+if is_admin():
+    with st.expander('⚙️ Panel de Administración — Gestión de Usuarios', expanded=False):
+        st.markdown('<div class="seccion-titulo">👥 Usuarios del Sistema</div>',
+                    unsafe_allow_html=True)
 
-st.markdown('<div class="seccion-titulo">📤 Carga de Indicadores</div>', unsafe_allow_html=True)
+        usuarios = list_users()
+        df_users = pd.DataFrame(usuarios)
+        st.dataframe(df_users, use_container_width=True, hide_index=True,
+                     column_config={
+                         'usuario': st.column_config.TextColumn('Usuario', width='medium'),
+                         'nombre':  st.column_config.TextColumn('Nombre completo', width='large'),
+                         'email':   st.column_config.TextColumn('Correo', width='large'),
+                         'rol':     st.column_config.TextColumn('Rol', width='small'),
+                     })
+
+        st.markdown('<div class="seccion-titulo">➕ Agregar Usuario</div>',
+                    unsafe_allow_html=True)
+        with st.form('form_add_user', clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            new_usr  = c1.text_input('Usuario (login)', placeholder='ej: jefe_acobamba')
+            new_name = c2.text_input('Nombre completo', placeholder='ej: Juan Pérez')
+            new_mail = c1.text_input('Correo electrónico', placeholder='ej: juan@diresa.gob.pe')
+            new_pwd  = c2.text_input('Contraseña inicial', type='password',
+                                     placeholder='Mínimo 6 caracteres')
+            new_rol  = st.selectbox('Rol', ['user', 'admin'],
+                                    format_func=lambda x: '👤 Usuario normal' if x == 'user'
+                                                          else '⚙️ Administrador')
+            if st.form_submit_button('➕ Crear usuario', use_container_width=True):
+                if not all([new_usr, new_name, new_mail, new_pwd]):
+                    st.error('Completa todos los campos.')
+                else:
+                    msg = add_user(new_usr.strip(), new_name.strip(),
+                                   new_mail.strip(), new_pwd, new_rol)
+                    if msg == 'OK':
+                        st.success(f'Usuario "{new_usr}" creado correctamente.')
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        st.markdown('<div class="seccion-titulo">🗑️ Eliminar Usuario</div>',
+                    unsafe_allow_html=True)
+        other_users = [u['usuario'] for u in usuarios if u['usuario'] != 'admin']
+        if other_users:
+            del_usr = st.selectbox('Selecciona usuario a eliminar', other_users)
+            if st.button(f'🗑️ Eliminar "{del_usr}"', type='secondary'):
+                msg = delete_user(del_usr)
+                if msg == 'OK':
+                    st.success(f'Usuario "{del_usr}" eliminado.')
+                    st.rerun()
+                else:
+                    st.error(msg)
+        else:
+            st.info('No hay usuarios adicionales para eliminar.')
+
+# ══════════════════════════════════════════════════════════════════
+#  CARGA DE INDICADORES
+# ══════════════════════════════════════════════════════════════════
+st.markdown('<div class="seccion-titulo">📤 Carga de Indicadores</div>',
+            unsafe_allow_html=True)
 
 c_info, c_up = st.columns([1, 2])
 with c_info:
@@ -66,34 +189,27 @@ if uploaded:
         st.warning(f'⚠️ No reconocidos (sin "Ficha_NN" en el nombre): {", ".join(errores)}')
 
 if st.session_state.fichas:
-    st.markdown('<div class="seccion-titulo">📋 Indicadores Cargados</div>', unsafe_allow_html=True)
+    st.markdown('<div class="seccion-titulo">📋 Indicadores Cargados</div>',
+                unsafe_allow_html=True)
     rows = []
     for fid, f in sorted(st.session_state.fichas.items()):
-        df = f['df']
+        df  = f['df']
         den = int(df['den'].sum())
         num = int(df['num'].sum())
         pct = num / den if den > 0 else 0
         color = get_semaforo_color(pct, f.get('logro'))
         emoji = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
-        rows.append({
-            'ID': fid,
-            'Indicador': f'{f["icono"]} {f["titulo"][:52]}',
-            'Meta': f['logro_str'],
-            'Den.': f'{den:,}',
-            'Num.': f'{num:,}',
-            '% Avance': f'{pct*100:.1f}%',
-            'Estado': emoji,
-        })
-    st.dataframe(
-        pd.DataFrame(rows),
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            'Estado':   st.column_config.TextColumn(width='small'),
-            '% Avance': st.column_config.TextColumn(width='small'),
-            'Meta':     st.column_config.TextColumn(width='small'),
-        },
-    )
+        rows.append({'ID': fid,
+                     'Indicador': f'{f["icono"]} {f["titulo"][:52]}',
+                     'Meta': f['logro_str'],
+                     'Den.': f'{den:,}', 'Num.': f'{num:,}',
+                     '% Avance': f'{pct*100:.1f}%', 'Estado': emoji})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                 column_config={
+                     'Estado':   st.column_config.TextColumn(width='small'),
+                     '% Avance': st.column_config.TextColumn(width='small'),
+                     'Meta':     st.column_config.TextColumn(width='small'),
+                 })
     total  = len(st.session_state.fichas)
     verdes = sum(1 for r in rows if r['Estado'] == '🟢')
     rojos  = sum(1 for r in rows if r['Estado'] == '🔴')
@@ -101,7 +217,7 @@ if st.session_state.fichas:
     m1.metric('Indicadores cargados', total)
     m2.metric('En meta o superando 🟢', verdes)
     m3.metric('Por debajo de meta 🔴', rojos)
-    st.info('👈 Usa el menú lateral para navegar a Resumen, Detalle o Pendientes.')
+    st.info('👈 Usa el menú lateral para navegar al Resumen o Detalle.')
 else:
     st.markdown("""
 <div style="text-align:center;padding:60px 20px;color:#8892a4;">

@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    admin:
+      email: squispilaya@continental.edu.pe
+      failed_login_attempts: 0
+      logged_in: false
+      name: Administrador DIRESA
+      password: "$2b$12$g5KciqmPnbZXI0/aDlCp5eJuTsEHPCOipQq3jIS4LUCrLto0AgWc."
+      role: admin
+
+cookie:
+  expiry_days: 30
+  key: diresa_hvca_2026_secret_key_xk9
+  name: diresa_hvca_auth

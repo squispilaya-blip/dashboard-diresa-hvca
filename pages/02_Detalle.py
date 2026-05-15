@@ -8,6 +8,7 @@ from utils.charts import bar_chart_por_eess
 from utils.map_renderer import render_map
 from utils.exports import df_to_excel_bytes, build_pdf_bytes
 from utils.constants import MESES, EXCLUIR_OPCIONES
+from utils.auth import require_auth, do_logout
 
 st.set_page_config(page_title='Detalle por Indicador', page_icon='🔍', layout='wide')
 
@@ -17,6 +18,8 @@ def _css():
         with open(p) as f:
             st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 _css()
+
+require_auth()
 
 if not st.session_state.get('fichas'):
     st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
@@ -43,15 +46,20 @@ def _limpiar_opciones(serie):
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('''<div style="text-align:center;padding:10px 0 14px 0;
-        border-bottom:1px solid rgba(255,255,255,0.18);margin-bottom:14px">
-      <div style="font-size:2.2rem">🏥</div>
-      <div style="color:white;font-weight:800;font-size:0.95rem;line-height:1.3">
-        DIRESA<br>HUANCAVELICA</div>
-      <div style="color:rgba(255,255,255,0.55);font-size:0.6rem;margin-top:3px">
-        DL 1153 · 2026</div>
+    st.markdown(f'''<div class="sb-brand">
+      <div style="font-size:2rem">🏥</div>
+      <div class="sb-brand-name">DIRESA<br>HUANCAVELICA</div>
+      <div class="sb-brand-sub">DL 1153 · 2026</div>
+      <div class="sb-user">👤 {st.session_state.get("user_name","")}</div>
     </div>''', unsafe_allow_html=True)
-    st.markdown('### 🔍 Indicador')
+
+    st.markdown('<p class="sb-nav-title">NAVEGACIÓN</p>', unsafe_allow_html=True)
+    st.page_link('app.py',              label='🏠 Inicio / Carga')
+    st.page_link('pages/01_Resumen.py', label='📊 Resumen General')
+    st.page_link('pages/02_Detalle.py', label='🔍 Detalle por Indicador')
+
+    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+    st.markdown('<p class="sb-section-title">🔍 INDICADOR</p>', unsafe_allow_html=True)
     fid = st.selectbox(
         'Seleccionar indicador:',
         ids,
@@ -65,8 +73,8 @@ with st.sidebar:
     tipo   = ficha.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
     unidad = ficha.get('unidad', '%')
 
-    st.markdown('---')
-    st.markdown('### 🎯 Filtros')
+    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+    st.markdown('<p class="sb-section-title">🎯 FILTROS</p>', unsafe_allow_html=True)
 
     # ── Cascading: Red ─────────────────────────────────────────────────────
     redes_opts = _limpiar_opciones(df_base['red'])
@@ -89,6 +97,11 @@ with st.sidebar:
                                format_func=lambda m: MESES_L[int(m)])
     if not meses_sel:
         meses_sel = meses_disp
+
+    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+    if st.button('🚪 Cerrar sesión', use_container_width=True):
+        do_logout()
+        st.switch_page('app.py')
 
 # ── Filtrado ──────────────────────────────────────────────────────────────────
 df_f = df_base
