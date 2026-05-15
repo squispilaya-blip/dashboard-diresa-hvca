@@ -39,7 +39,6 @@ def render_sidebar_brand() -> None:
     st.markdown('<p class="sb-nav-title">NAVEGACIÓN</p>', unsafe_allow_html=True)
     st.page_link('app.py',              label='🏠 Inicio / Carga')
     st.page_link('pages/01_Resumen.py', label='📊 Resumen General')
-    st.page_link('pages/02_Detalle.py', label='🔍 Detalle por Indicador')
     st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
 
 

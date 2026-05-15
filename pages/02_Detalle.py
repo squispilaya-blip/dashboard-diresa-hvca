@@ -58,21 +58,27 @@ with st.sidebar:
         st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
         st.markdown('<p class="sb-section-title">🎯 FILTROS</p>', unsafe_allow_html=True)
 
+        # Claves con fid: cuando el indicador cambia → claves distintas → widgets
+        # nuevos → resetean a "Todas" en el mismo rerun → un solo clic basta.
         redes_opts = _limpiar_opciones(df_base['red'])
-        red_sel = st.selectbox('Red de Salud', ['Todas'] + redes_opts)
+        red_sel = st.selectbox('Red de Salud', ['Todas'] + redes_opts,
+                               key=f'red_{fid}')
         df_r = df_base if red_sel == 'Todas' else df_base[df_base['red'] == red_sel]
 
         mrs_opts = _limpiar_opciones(df_r['microred'])
-        mr_sel = st.selectbox('Microred', ['Todas'] + mrs_opts)
+        mr_sel = st.selectbox('Microred', ['Todas'] + mrs_opts,
+                              key=f'mr_{fid}')
         df_mr = df_r if mr_sel == 'Todas' else df_r[df_r['microred'] == mr_sel]
 
         eess_opts = _limpiar_opciones(df_mr['eess'])
-        eess_sel = st.selectbox('Establecimiento', ['Todas'] + eess_opts)
+        eess_sel = st.selectbox('Establecimiento', ['Todas'] + eess_opts,
+                                key=f'eess_{fid}')
 
         meses_disp = sorted(m for m in df_base['mes'].unique() if m > 0)
         MESES_L = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
         meses_sel = st.multiselect('📅 Mes(es)', meses_disp, default=meses_disp,
-                                   format_func=lambda m: MESES_L[int(m)])
+                                   format_func=lambda m: MESES_L[int(m)],
+                                   key=f'meses_{fid}')
         if not meses_sel:
             meses_sel = meses_disp
 

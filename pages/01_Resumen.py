@@ -4,7 +4,6 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loader import get_semaforo_color
 from utils.charts import kpi_card_html
-from utils.map_renderer import render_map
 from utils.constants import EXCLUIR_OPCIONES
 from utils.auth import require_auth
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
@@ -14,13 +13,10 @@ load_css()
 
 require_auth()
 
-fichas  = st.session_state.get('fichas', {})
-_NONE   = '— Selecciona un indicador —'
-# Valores por defecto (se sobreescriben en el sidebar si hay fichas)
+fichas     = st.session_state.get('fichas', {})
 red_filtro = 'Todas'
-ind_mapa   = _NONE
 
-# ── Sidebar — siempre se renderiza (antes del st.stop) ───────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     render_sidebar_brand()
 
@@ -33,17 +29,6 @@ with st.sidebar:
         red_filtro = st.selectbox('Red de Salud / Provincia',
                                   ['Todas'] + redes_disp,
                                   label_visibility='collapsed')
-
-        st.markdown('<p class="sb-section-title">🗺️ INDICADOR EN EL MAPA</p>',
-                    unsafe_allow_html=True)
-        ids = sorted(fichas.keys())
-        ind_mapa = st.selectbox(
-            'Ver en el mapa:',
-            [_NONE] + ids,
-            format_func=lambda x: x if x == _NONE
-                                  else f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:28]}',
-            label_visibility='collapsed',
-        )
 
     render_sidebar_logout()
 
@@ -59,9 +44,7 @@ def filtrar(df):
     return df[df['red'] == red_filtro]
 
 
-# Precalcular DataFrames filtrados UNA sola vez por rerun
 filtered_dfs = {fid: filtrar(f['df']) for fid, f in fichas.items()}
-
 
 # ── Header ────────────────────────────────────────────────────────────────────
 now = datetime.now()
@@ -96,74 +79,6 @@ m1.metric('Indicadores cargados', total)
 m2.metric('🟢 En meta', verdes)
 m3.metric('🟡 Cerca de meta', amarillos)
 m4.metric('🔴 Por debajo', rojos)
-
-# ── Mapa + detalle del indicador seleccionado ─────────────────────────────────
-col_mapa, col_kpi = st.columns([1, 1])
-
-with col_mapa:
-    st.markdown('<div class="seccion-titulo">🗺️ Mapa de Avance por Provincia / Red</div>',
-                unsafe_allow_html=True)
-    if ind_mapa == _NONE:
-        st.markdown("""
-        <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;height:340px;
-                    background:rgba(17,34,64,0.6);border-radius:12px;
-                    border:2px dashed rgba(255,255,255,0.15);">
-          <div style="font-size:3rem">🗺️</div>
-          <p style="color:rgba(255,255,255,0.5);margin-top:12px;text-align:center;">
-            Selecciona un indicador<br>en el menú lateral para ver el mapa
-          </p>
-        </div>""", unsafe_allow_html=True)
-    else:
-        f_mapa  = fichas[ind_mapa]
-        df_mapa = filtered_dfs[ind_mapa]
-        try:
-            img_bytes = render_map(df_mapa, f_mapa.get('logro'))
-            st.markdown('<div class="mapa-container">', unsafe_allow_html=True)
-            st.image(img_bytes, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.warning(f'No se pudo renderizar el mapa: {e}')
-
-with col_kpi:
-    if ind_mapa == _NONE:
-        st.markdown("""
-        <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;height:340px;
-                    background:rgba(17,34,64,0.6);border-radius:12px;
-                    border:2px dashed rgba(255,255,255,0.15);">
-          <div style="font-size:3rem">📊</div>
-          <p style="color:rgba(255,255,255,0.5);margin-top:12px;text-align:center;">
-            Selecciona un indicador<br>para ver sus métricas
-          </p>
-        </div>""", unsafe_allow_html=True)
-    else:
-        f_mapa  = fichas[ind_mapa]
-        df_sel  = filtered_dfs[ind_mapa]
-        den_s   = int(df_sel['den'].sum())
-        num_s   = int(df_sel['num'].sum())
-        pct_s   = num_s / den_s if den_s > 0 else 0
-        color_s = get_semaforo_color(pct_s, f_mapa.get('logro'))
-        emoji_s = '🟢' if color_s == 'verde' else ('🟡' if color_s == 'amarillo' else '🔴')
-        estado_lbl = ('En Meta' if color_s == 'verde'
-                      else ('Cerca de Meta' if color_s == 'amarillo' else 'Por Debajo'))
-
-        st.markdown(f'<div class="seccion-titulo">📊 {f_mapa["icono"]} {f_mapa["titulo"][:40]}</div>',
-                    unsafe_allow_html=True)
-        mc1, mc2, mc3 = st.columns(3)
-        mc1.metric('Denominador', f'{den_s:,}')
-        mc2.metric('Numerador',   f'{num_s:,}')
-        mc3.metric('% Avance',    f'{pct_s*100:.1f}%')
-        mc4, mc5, mc6 = st.columns(3)
-        mc4.metric('Pendientes', f'{max(0, den_s - num_s):,}')
-        mc5.metric('Meta',       f_mapa.get('logro_str', 'N/D'))
-        mc6.metric('Estado', emoji_s, estado_lbl)
-
-        st.markdown('<br>', unsafe_allow_html=True)
-        if st.button('📋 Ver análisis completo', key='btn_mapa_detail',
-                     use_container_width=True):
-            st.session_state.selected_ficha = ind_mapa
-            st.switch_page('pages/02_Detalle.py')
 
 # ── 16 KPI Cards ──────────────────────────────────────────────────────────────
 st.markdown('<div class="seccion-titulo">🎯 Todos los Indicadores — Haz clic para ver detalle</div>',

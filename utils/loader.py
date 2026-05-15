@@ -1,3 +1,4 @@
+import io
 import re
 import pandas as pd
 import numpy as np
@@ -175,3 +176,12 @@ def load_ficha(file, filename: str) -> dict | None:
         'has_red':     df_norm['red'].str.len().gt(0).any(),
         'has_eess':    df_norm['eess'].str.len().gt(0).any(),
     }
+
+
+def load_ficha_bytes(file_bytes: bytes, filename: str) -> dict | None:
+    """Versión thread-safe de load_ficha: acepta bytes en lugar de un objeto file.
+
+    Cada hilo crea su propio BytesIO, así que no hay condición de carrera.
+    Úsala con ThreadPoolExecutor para carga paralela de múltiples fichas.
+    """
+    return load_ficha(io.BytesIO(file_bytes), filename)

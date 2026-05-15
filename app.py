@@ -1,6 +1,9 @@
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
+
 import streamlit as st
 import pandas as pd
-from utils.loader import load_ficha, get_semaforo_color
+from utils.loader import load_ficha_bytes, get_semaforo_color
 from utils.auth import (do_login, is_authenticated, is_admin,
                         list_users, add_user, delete_user)
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
@@ -168,19 +171,48 @@ with c_up:
     )
 
 if uploaded:
-    nuevas, errores = 0, []
-    with st.spinner('Procesando archivos...'):
-        for f in uploaded:
-            result = load_ficha(f, f.name)
-            if result:
-                st.session_state.fichas[result['id']] = result
-                nuevas += 1
-            else:
-                errores.append(f.name)
+    # 1. Leer bytes en el hilo principal (UploadedFile no es thread-safe)
+    files_data = [(f.read(), f.name) for f in uploaded]
+
+    # 2. Separar archivos ya procesados (caché por hash MD5) de los nuevos
+    pending, nuevas, desde_cache, errores = [], 0, 0, []
+    for fb, fn in files_data:
+        cache_key = f'_fc_{hashlib.md5(fb).hexdigest()}'
+        if cache_key in st.session_state:          # ya procesado antes
+            cached = st.session_state[cache_key]
+            if cached:
+                st.session_state.fichas[cached['id']] = cached
+                desde_cache += 1
+        else:
+            pending.append((fb, fn, cache_key))
+
+    # 3. Procesar archivos nuevos en paralelo
+    if pending:
+        def _procesar(args):
+            fb, fn, ck = args
+            return load_ficha_bytes(fb, fn), ck
+
+        with st.spinner(f'Procesando {len(pending)} archivo(s) nuevos…'):
+            workers = min(len(pending), 8)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for result, ck in pool.map(_procesar, pending):
+                    st.session_state[ck] = result      # guardar en caché
+                    if result:
+                        st.session_state.fichas[result['id']] = result
+                        nuevas += 1
+                    else:
+                        errores.append(ck)             # nombre no disponible aquí
+
+    # 4. Mensajes de resultado
+    partes = []
     if nuevas:
-        st.success(f'✅ {nuevas} indicador(es) cargados correctamente.')
+        partes.append(f'{nuevas} nuevo(s)')
+    if desde_cache:
+        partes.append(f'{desde_cache} desde caché (sin reprocesar)')
+    if partes:
+        st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s).')
     if errores:
-        st.warning(f'⚠️ No reconocidos (sin "Ficha_NN" en el nombre): {", ".join(errores)}')
+        st.warning(f'⚠️ {len(errores)} archivo(s) no reconocido(s) (el nombre debe incluir "Ficha_NN").')
 
 if st.session_state.fichas:
     st.markdown('<div class="seccion-titulo">📋 Indicadores Cargados</div>',
