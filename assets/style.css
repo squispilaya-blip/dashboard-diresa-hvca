@@ -1,13 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Round');
 
-/* ── Inter global — excluye TODAS las clases de iconos Material ─────────────
-   Por qué :not() y no * + restauración:
-   «!important en * vence sobre reglas sin !important de Streamlit sin importar
-   la especificidad». Con :not() los elementos de icono NUNCA entran en la regla
-   y Streamlit les aplica su propio font-family sin conflicto.
-   Cubre Material Icons (legacy) y Material Symbols (Streamlit ≥ 1.28).        */
-*:not(.material-icons):not(.material-icons-round):not(.material-icons-outlined):not(.material-icons-sharp):not(.material-symbols-rounded):not(.material-symbols-outlined):not(.material-symbols-sharp) {
+/* ── Fuente Inter — sólo en los bloques HTML propios del dashboard ──────────
+   DIAGNÓSTICO: Streamlit ≥ 1.28 gestiona los iconos (breadcrumb, expander)
+   con clases CSS generadas por emotion (st-emotion-cache-*), NO con
+   .material-icons ni .material-symbols-rounded. Por eso cualquier regla
+   * { font-family: Inter !important } — o :not() sobre clases de iconos —
+   rompe esas fuentes: el selector * alcanza elementos con clases emotion
+   que no podemos predecir en CSS estático.
+
+   SOLUCIÓN: eliminar la regla global. Streamlit 1.35 ya aplica Inter a sus
+   propios widgets. Solo aplicamos Inter !important a los bloques HTML que
+   nosotros inyectamos con st.markdown(unsafe_allow_html=True).              */
+.header-diresa, .header-diresa *,
+.kpi-card, .kpi-card *,
+.seccion-titulo,
+.sb-brand, .sb-brand *,
+.sb-nav-title, .sb-section-title,
+.en-vivo-badge, .en-vivo-badge *,
+.global-strip, .global-strip *,
+.mapa-container {
     font-family: 'Inter', sans-serif !important;
 }
 
