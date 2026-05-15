@@ -162,7 +162,7 @@ def load_ficha(file, filename: str) -> dict | None:
 
     return {
         'id':         ficha_id,
-        'titulo':     titulo or meta.get('nombre', f'Indicador {ficha_id}'),
+        'titulo':     meta.get('nombre') or titulo or f'Indicador {ficha_id}',
         'logro':      logro_efectivo,
         'logro_str':  logro_str_efectivo,
         'icono':      meta.get('icono', '📊'),
