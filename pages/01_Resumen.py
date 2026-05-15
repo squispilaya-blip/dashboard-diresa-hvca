@@ -96,7 +96,8 @@ for i in range(0, len(ids), 4):
         with cols[j]:
             st.markdown(
                 kpi_card_html(f['icono'], f['titulo'][:60], pct, f.get('logro'), color,
-                              tipo=f.get('tipo', 'pct'), unidad=f.get('unidad', '%')),
+                              tipo=f.get('tipo', 'pct'), unidad=f.get('unidad', '%'),
+                              titulo_full=f['titulo']),
                 unsafe_allow_html=True,
             )
             if st.button(f'📋 Ver detalle', key=f'btn_{fid}', use_container_width=True):

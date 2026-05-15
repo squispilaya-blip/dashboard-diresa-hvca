@@ -19,7 +19,8 @@ def _layout_base(title: str, height: int = 340) -> dict:
 
 def kpi_card_html(icono: str, titulo: str, pct: float,
                   logro: float | None, color: str,
-                  tipo: str = 'pct', unidad: str = '%') -> str:
+                  tipo: str = 'pct', unidad: str = '%',
+                  titulo_full: str = '') -> str:
     if tipo == 'promedio':
         pct_str  = f'{pct:.2f} {unidad}'
         meta_str = 'Promedio de espera'
@@ -42,7 +43,8 @@ def kpi_card_html(icono: str, titulo: str, pct: float,
         emoji    = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
 
     card_color = color if color in ('verde', 'amarillo', 'rojo') else 'rojo'
-    return f"""<div class="kpi-card {card_color}">
+    tooltip = titulo_full or titulo
+    return f"""<div class="kpi-card {card_color}" title="{tooltip}">
   <div class="kpi-icono">{icono}&nbsp;{emoji}</div>
   <div class="kpi-titulo">{titulo}</div>
   <div class="kpi-valor">{pct_str}</div>
