@@ -25,11 +25,11 @@ def extract_logro(hoja1_df: pd.DataFrame) -> float | None:
     return None
 
 
-def _find_col(df: pd.DataFrame, standard: str) -> str | None:
+def _find_col(cols_set: set, cols_lower: dict, standard: str) -> str | None:
+    """Busca la columna estándar usando el set y dict ya construidos."""
     candidates = COLUMN_MAP.get(standard, [])
-    cols_lower = {c.lower().strip(): c for c in df.columns}
     for cand in candidates:
-        if cand in df.columns:
+        if cand in cols_set:
             return cand
         if cand.lower() in cols_lower:
             return cols_lower[cand.lower()]
@@ -37,9 +37,12 @@ def _find_col(df: pd.DataFrame, standard: str) -> str | None:
 
 
 def normalize_df(df: pd.DataFrame, ficha_id: str) -> pd.DataFrame:
+    # Construir lookup una sola vez para los 11 estándares de COLUMN_MAP
+    cols_set   = set(df.columns)
+    cols_lower = {c.lower().strip(): c for c in df.columns}
     out = {}
     for std in COLUMN_MAP:
-        found = _find_col(df, std)
+        found = _find_col(cols_set, cols_lower, std)
         out[std] = df[found] if found is not None else np.nan
     result = pd.DataFrame(out)
     result['den'] = pd.to_numeric(result['den'], errors='coerce').fillna(0).astype(int)

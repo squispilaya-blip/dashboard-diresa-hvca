@@ -179,12 +179,16 @@ def _agrupar_por_provincia(df: pd.DataFrame) -> dict:
     return prov_data
 
 
-@st.cache_data(max_entries=20, show_spinner=False)   # CRITICAL-1: cache PIL flood-fill
-def render_map(df: pd.DataFrame, logro: float | None) -> bytes:
+@st.cache_data(max_entries=40, show_spinner=False)
+def _render_map_cached(prov_tuple: tuple, logro: float | None) -> bytes:
     """
-    Genera mapa PNG con provincias coloreadas según % avance.
-    Retorna bytes PNG.
+    Núcleo del renderizado — recibe un tuple hashable con el resumen
+    por provincia en lugar del DataFrame completo.  Así el cache key
+    es microscópico (7 × 4 valores) en vez de un hash de 35 K filas.
     """
+    # Reconstruir dict de provincia desde la tuple
+    prov_data = {p: {'den': d, 'num': n, 'pct': pc} for p, d, n, pc in prov_tuple}
+
     img = Image.open(MAP_PATH).convert('RGBA')
 
     # CRITICAL-3: guard de resolución
@@ -195,7 +199,6 @@ def render_map(df: pd.DataFrame, logro: float | None) -> bytes:
         )
 
     overlay = img.copy()
-    prov_data = _agrupar_por_provincia(df)
 
     for prov, seeds in PROVINCE_SEEDS.items():
         pdata = prov_data.get(prov, {})
@@ -252,6 +255,21 @@ def render_map(df: pd.DataFrame, logro: float | None) -> bytes:
     result.convert('RGB').save(buf, format='PNG', dpi=(120, 120))
     buf.seek(0)
     return buf.getvalue()
+
+
+def render_map(df: pd.DataFrame, logro: float | None) -> bytes:
+    """
+    API pública: agrega el DataFrame a nivel provincia (vectorizado)
+    y delega en _render_map_cached con un key diminuto.
+    Así el flood-fill PIL sólo se repite cuando cambia el resumen
+    provincial, no cada vez que Streamlit hace re-hash de un DF grande.
+    """
+    prov_data = _agrupar_por_provincia(df)
+    prov_tuple = tuple(
+        (p, prov_data[p]['den'], prov_data[p]['num'], round(prov_data[p]['pct'], 8))
+        for p in sorted(prov_data.keys())
+    )
+    return _render_map_cached(prov_tuple, logro)
 
 
 def _draw_legend(draw, W, H, logro):

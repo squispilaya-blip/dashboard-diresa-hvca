@@ -60,7 +60,7 @@ with st.sidebar:
     )
     st.session_state.selected_ficha = fid
     ficha = fichas[fid]
-    df_base = ficha['df'].copy()
+    df_base = ficha['df']          # referencia directa — los filtros siempre crean nuevas vistas
     logro, logro_str = ficha.get('logro'), ficha.get('logro_str', 'N/D')
     tipo   = ficha.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
     unidad = ficha.get('unidad', '%')
@@ -91,7 +91,7 @@ with st.sidebar:
         meses_sel = meses_disp
 
 # ── Filtrado ──────────────────────────────────────────────────────────────────
-df_f = df_base.copy()
+df_f = df_base
 if red_sel   != 'Todas': df_f = df_f[df_f['red']      == red_sel]
 if mr_sel    != 'Todas': df_f = df_f[df_f['microred']  == mr_sel]
 if eess_sel  != 'Todas': df_f = df_f[df_f['eess']      == eess_sel]

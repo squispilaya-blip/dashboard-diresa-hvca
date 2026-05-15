@@ -52,8 +52,13 @@ with st.sidebar:
 
 def filtrar(df):
     if red_filtro == 'Todas':
-        return df.copy()
-    return df[df['red'] == red_filtro].copy()
+        return df                               # referencia directa — sin copia innecesaria
+    return df[df['red'] == red_filtro]          # el slice ya crea un nuevo objeto
+
+
+# Precalcular DataFrames filtrados UNA sola vez por rerun
+# Evita 32+ llamadas a filtrar() dispersas por la página
+filtered_dfs = {fid: filtrar(f['df']) for fid, f in fichas.items()}
 
 
 # ── Header con EN VIVO ────────────────────────────────────────────────────────
@@ -74,7 +79,7 @@ st.markdown(f"""<div class="header-diresa">
 total = len(fichas)
 verdes, amarillos = 0, 0
 for fid, f in fichas.items():
-    df_f = filtrar(f['df'])
+    df_f = filtered_dfs[fid]
     d = int(df_f['den'].sum())
     n = int(df_f['num'].sum())
     color = get_semaforo_color(n / d if d > 0 else 0, f.get('logro'))
@@ -97,7 +102,7 @@ with col_mapa:
     st.markdown('<div class="seccion-titulo">🗺️ Mapa de Avance por Provincia / Red</div>',
                 unsafe_allow_html=True)
     f_mapa = fichas[ind_mapa]
-    df_mapa = filtrar(f_mapa['df'])
+    df_mapa = filtered_dfs[ind_mapa]
     try:
         img_bytes = render_map(df_mapa, f_mapa.get('logro'))
         st.markdown('<div class="mapa-container">', unsafe_allow_html=True)
@@ -139,7 +144,7 @@ for i in range(0, len(ids), 4):
     cols = st.columns(4)
     for j, fid in enumerate(ids[i:i+4]):
         f = fichas[fid]
-        df_f = filtrar(f['df'])
+        df_f = filtered_dfs[fid]
         den = int(df_f['den'].sum())
         num = int(df_f['num'].sum())
         pct = num / den if den > 0 else 0

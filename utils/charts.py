@@ -1,3 +1,4 @@
+import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -155,6 +156,7 @@ def scatter_map_provincias(df: pd.DataFrame, logro: float | None,
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def bar_chart_por_eess(df: pd.DataFrame, titulo: str,
                        logro: float | None,
                        tipo: str = 'pct', unidad: str = '%') -> go.Figure:
@@ -219,6 +221,7 @@ def bar_chart_por_eess(df: pd.DataFrame, titulo: str,
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def donut_chart(num: int, den: int, logro: float | None, titulo: str) -> go.Figure:
     pendiente = max(0, den - num)
     pct = num / den * 100 if den > 0 else 0
@@ -244,6 +247,7 @@ def donut_chart(num: int, den: int, logro: float | None, titulo: str) -> go.Figu
     return fig
 
 
+@st.cache_data(show_spinner=False)
 def line_chart_mensual(df: pd.DataFrame, titulo: str) -> go.Figure:
     if df.empty or 'mes' not in df.columns:
         return go.Figure()
