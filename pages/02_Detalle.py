@@ -52,18 +52,20 @@ with st.sidebar:
 
     if fichas:
         ids = sorted(fichas.keys())
-        default_idx = 0
-        if st.session_state.get('selected_ficha') in ids:
-            default_idx = ids.index(st.session_state.selected_ficha)
+
+        # Garantizar que selected_ficha sea un ID válido antes del widget
+        # (evita el doble-clic: usar key= en lugar de index= sincroniza
+        #  el estado en un solo rerun)
+        if st.session_state.get('selected_ficha') not in ids:
+            st.session_state.selected_ficha = ids[0]
 
         st.markdown('<p class="sb-section-title">🔍 INDICADOR</p>', unsafe_allow_html=True)
         fid = st.selectbox(
             'Seleccionar indicador:',
             ids,
-            index=default_idx,
+            key='selected_ficha',          # ← Streamlit maneja el estado directamente
             format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:26]}',
         )
-        st.session_state.selected_ficha = fid
         ficha   = fichas[fid]
         df_base = ficha['df']
         logro, logro_str = ficha.get('logro'), ficha.get('logro_str', 'N/D')
