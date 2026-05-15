@@ -74,32 +74,57 @@ def load_ficha(file, filename: str) -> dict | None:
     if ficha_id is None:
         return None
     meta = INDICADORES.get(ficha_id, {})
+
+    # Abrir el archivo UNA SOLA VEZ con ExcelFile + motor calamine (Rust, ~3.5x más rápido)
+    # Antes: pd.read_excel() hasta 11 veces por archivo; ahora: 1 apertura, N parses directos
     try:
-        hoja1 = pd.read_excel(file, sheet_name='Hoja1', header=None)
-        logro = extract_logro(hoja1)
-        titulo_raw = str(hoja1.iloc[0, 0])
-        titulo = re.sub(r'^Ficha\s*(N[°º]?\s*)?\d+[:\.\-]?\s*', '', titulo_raw,
-                        flags=re.IGNORECASE).strip()[:80]
+        file.seek(0)
+        xl = pd.ExcelFile(file, engine='calamine')
+        sheets_set = set(xl.sheet_names)
+    except Exception:
+        # Fallback a openpyxl si calamine no está disponible
+        try:
+            file.seek(0)
+            xl = pd.ExcelFile(file, engine='openpyxl')
+            sheets_set = set(xl.sheet_names)
+        except Exception:
+            return None
+
+    # Leer Hoja1 para extraer logro y título
+    try:
+        if 'Hoja1' in sheets_set:
+            hoja1 = xl.parse('Hoja1', header=None)
+            logro = extract_logro(hoja1)
+            titulo_raw = str(hoja1.iloc[0, 0])
+            titulo = re.sub(r'^Ficha\s*(N[°º]?\s*)?\d+[:\.\-]?\s*', '', titulo_raw,
+                            flags=re.IGNORECASE).strip()[:80]
+        else:
+            raise ValueError('sin Hoja1')
     except Exception:
         logro = None
         titulo = meta.get('nombre', f'Indicador {ficha_id}')
-    # CRITICAL-2: intentar varios nombres de hoja de datos
+
+    # Encontrar la hoja de datos: lookup O(1) contra el set, sin reabrir el archivo
     _SHEET_CANDIDATES = ['sheet1', 'Sheet1', 'SHEET1', 'Hoja2', 'hoja2',
                          'datos', 'Datos', 'DATOS', 'data', 'Data']
     df = None
     for _sheet in _SHEET_CANDIDATES:
-        try:
-            file.seek(0)
-            df = pd.read_excel(file, sheet_name=_sheet)
-            break
-        except Exception:
-            continue
+        if _sheet in sheets_set:          # solo parsea si la hoja existe
+            try:
+                df = xl.parse(_sheet)
+                break
+            except Exception:
+                continue
+
     if df is None:
-        # último recurso: leer la segunda hoja por índice
-        try:
-            file.seek(0)
-            df = pd.read_excel(file, sheet_name=1)
-        except Exception:
+        # Fallback: primera hoja que no sea Hoja1
+        otras = [s for s in xl.sheet_names if s != 'Hoja1']
+        if otras:
+            try:
+                df = xl.parse(otras[0])
+            except Exception:
+                return None
+        else:
             return None
     if logro is None:
         logro = meta.get('logro_default')
