@@ -19,13 +19,13 @@ _css()
 
 require_auth()
 
-if not st.session_state.get('fichas'):
-    st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
-    st.stop()
+fichas  = st.session_state.get('fichas', {})
+_NONE   = '— Selecciona un indicador —'
+# Valores por defecto (se sobreescriben en el sidebar si hay fichas)
+red_filtro = 'Todas'
+ind_mapa   = _NONE
 
-fichas = st.session_state.fichas
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar — siempre se renderiza (antes del st.stop) ───────────────────────
 with st.sidebar:
     st.markdown(f'''<div class="sb-brand">
       <div style="font-size:2rem">🏥</div>
@@ -41,31 +41,36 @@ with st.sidebar:
 
     st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
 
-    st.markdown('<p class="sb-section-title">🌐 FILTRO DE RED</p>',
-                unsafe_allow_html=True)
-    redes_disp = sorted({r for f in fichas.values()
-                         for r in f['df']['red'].unique()
-                         if r and len(r) > 1 and r.upper() not in EXCLUIR_OPCIONES})
-    red_filtro = st.selectbox('Red de Salud / Provincia',
-                              ['Todas'] + redes_disp,
-                              label_visibility='collapsed')
+    if fichas:
+        st.markdown('<p class="sb-section-title">🌐 FILTRO DE RED</p>',
+                    unsafe_allow_html=True)
+        redes_disp = sorted({r for f in fichas.values()
+                             for r in f['df']['red'].unique()
+                             if r and len(r) > 1 and r.upper() not in EXCLUIR_OPCIONES})
+        red_filtro = st.selectbox('Red de Salud / Provincia',
+                                  ['Todas'] + redes_disp,
+                                  label_visibility='collapsed')
 
-    st.markdown('<p class="sb-section-title">🗺️ INDICADOR EN EL MAPA</p>',
-                unsafe_allow_html=True)
-    _NONE = '— Selecciona un indicador —'
-    ids   = sorted(fichas.keys())
-    ind_mapa = st.selectbox(
-        'Ver en el mapa:',
-        [_NONE] + ids,
-        format_func=lambda x: x if x == _NONE
-                              else f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:28]}',
-        label_visibility='collapsed',
-    )
+        st.markdown('<p class="sb-section-title">🗺️ INDICADOR EN EL MAPA</p>',
+                    unsafe_allow_html=True)
+        ids = sorted(fichas.keys())
+        ind_mapa = st.selectbox(
+            'Ver en el mapa:',
+            [_NONE] + ids,
+            format_func=lambda x: x if x == _NONE
+                                  else f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:28]}',
+            label_visibility='collapsed',
+        )
 
     st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
     if st.button('🚪 Cerrar sesión', use_container_width=True):
         do_logout()
         st.switch_page('app.py')
+
+# ── Guardia: sin fichas cargadas ──────────────────────────────────────────────
+if not fichas:
+    st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
+    st.stop()
 
 
 def filtrar(df):

@@ -21,18 +21,6 @@ _css()
 
 require_auth()
 
-if not st.session_state.get('fichas'):
-    st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
-    st.stop()
-
-fichas = st.session_state.fichas
-ids = sorted(fichas.keys())
-
-# Pre-seleccionar si venimos del Resumen
-default_idx = 0
-if st.session_state.get('selected_ficha') in ids:
-    default_idx = ids.index(st.session_state.selected_ficha)
-
 
 def _limpiar_opciones(serie):
     """Retorna lista limpia sin NAN/vacíos/colores semáforo/nulos, ordenada."""
@@ -44,7 +32,9 @@ def _limpiar_opciones(serie):
     return sorted(vals)
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+fichas = st.session_state.get('fichas', {})
+
+# ── Sidebar — siempre se renderiza (antes del st.stop) ───────────────────────
 with st.sidebar:
     st.markdown(f'''<div class="sb-brand">
       <div style="font-size:2rem">🏥</div>
@@ -59,49 +49,60 @@ with st.sidebar:
     st.page_link('pages/02_Detalle.py', label='🔍 Detalle por Indicador')
 
     st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
-    st.markdown('<p class="sb-section-title">🔍 INDICADOR</p>', unsafe_allow_html=True)
-    fid = st.selectbox(
-        'Seleccionar indicador:',
-        ids,
-        index=default_idx,
-        format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:26]}',
-    )
-    st.session_state.selected_ficha = fid
-    ficha = fichas[fid]
-    df_base = ficha['df']          # referencia directa — los filtros siempre crean nuevas vistas
-    logro, logro_str = ficha.get('logro'), ficha.get('logro_str', 'N/D')
-    tipo   = ficha.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
-    unidad = ficha.get('unidad', '%')
 
-    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
-    st.markdown('<p class="sb-section-title">🎯 FILTROS</p>', unsafe_allow_html=True)
+    if fichas:
+        ids = sorted(fichas.keys())
+        default_idx = 0
+        if st.session_state.get('selected_ficha') in ids:
+            default_idx = ids.index(st.session_state.selected_ficha)
 
-    # ── Cascading: Red ─────────────────────────────────────────────────────
-    redes_opts = _limpiar_opciones(df_base['red'])
-    red_sel = st.selectbox('Red de Salud', ['Todas'] + redes_opts)
-    df_r = df_base if red_sel == 'Todas' else df_base[df_base['red'] == red_sel]
+        st.markdown('<p class="sb-section-title">🔍 INDICADOR</p>', unsafe_allow_html=True)
+        fid = st.selectbox(
+            'Seleccionar indicador:',
+            ids,
+            index=default_idx,
+            format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:26]}',
+        )
+        st.session_state.selected_ficha = fid
+        ficha   = fichas[fid]
+        df_base = ficha['df']
+        logro, logro_str = ficha.get('logro'), ficha.get('logro_str', 'N/D')
+        tipo    = ficha.get('tipo', 'pct')
+        unidad  = ficha.get('unidad', '%')
 
-    # ── Cascading: Microred (depende de Red) ───────────────────────────────
-    mrs_opts = _limpiar_opciones(df_r['microred'])
-    mr_sel = st.selectbox('Microred', ['Todas'] + mrs_opts)
-    df_mr = df_r if mr_sel == 'Todas' else df_r[df_r['microred'] == mr_sel]
+        st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+        st.markdown('<p class="sb-section-title">🎯 FILTROS</p>', unsafe_allow_html=True)
 
-    # ── Cascading: EESS (depende de Microred) ─────────────────────────────
-    eess_opts = _limpiar_opciones(df_mr['eess'])
-    eess_sel = st.selectbox('Establecimiento', ['Todas'] + eess_opts)
+        redes_opts = _limpiar_opciones(df_base['red'])
+        red_sel = st.selectbox('Red de Salud', ['Todas'] + redes_opts)
+        df_r = df_base if red_sel == 'Todas' else df_base[df_base['red'] == red_sel]
 
-    # ── Mes ────────────────────────────────────────────────────────────────
-    meses_disp = sorted(m for m in df_base['mes'].unique() if m > 0)
-    MESES_L = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-    meses_sel = st.multiselect('📅 Mes(es)', meses_disp, default=meses_disp,
-                               format_func=lambda m: MESES_L[int(m)])
-    if not meses_sel:
-        meses_sel = meses_disp
+        mrs_opts = _limpiar_opciones(df_r['microred'])
+        mr_sel = st.selectbox('Microred', ['Todas'] + mrs_opts)
+        df_mr = df_r if mr_sel == 'Todas' else df_r[df_r['microred'] == mr_sel]
 
-    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+        eess_opts = _limpiar_opciones(df_mr['eess'])
+        eess_sel = st.selectbox('Establecimiento', ['Todas'] + eess_opts)
+
+        meses_disp = sorted(m for m in df_base['mes'].unique() if m > 0)
+        MESES_L = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+        meses_sel = st.multiselect('📅 Mes(es)', meses_disp, default=meses_disp,
+                                   format_func=lambda m: MESES_L[int(m)])
+        if not meses_sel:
+            meses_sel = meses_disp
+
+        st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+
     if st.button('🚪 Cerrar sesión', use_container_width=True):
         do_logout()
         st.switch_page('app.py')
+
+# ── Guardia: sin fichas cargadas ──────────────────────────────────────────────
+if not fichas:
+    st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
+    st.stop()
+
+ids = sorted(fichas.keys())
 
 # ── Filtrado ──────────────────────────────────────────────────────────────────
 df_f = df_base
