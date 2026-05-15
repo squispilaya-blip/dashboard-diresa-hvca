@@ -241,13 +241,17 @@ def _render_map_cached(prov_tuple: tuple, logro: float | None) -> bytes:
     draw = ImageDraw.Draw(result)
     font = _load_font(20)
 
+    font_sm = _load_font(15)
     for prov, pos in LABEL_POSITIONS.items():
         pdata = prov_data.get(prov, {})
         if pdata and pdata.get('den', 0) > 0:
-            pct = float(pdata['pct'])
+            pct   = float(pdata['pct'])
             estado = _get_semaforo(pct, logro)
-            _draw_badge(draw, pos[0], pos[1], f'{pct*100:.0f}%', font,
-                        SEMAFORO_COLORS[estado])
+            label  = f'{pct*100:.0f}%'
+            _draw_badge(draw, pos[0], pos[1], label, font, SEMAFORO_COLORS[estado])
+        else:
+            # Siempre mostrar badge para las 7 provincias — "S/D" = Sin Datos
+            _draw_badge(draw, pos[0], pos[1], 'S/D', font_sm, SEMAFORO_COLORS['sin_data'])
 
     _draw_legend(draw, result.size[0], result.size[1], logro)
 
@@ -278,16 +282,18 @@ def _draw_legend(draw, W, H, logro):
         (SEMAFORO_COLORS['verde'],    'En Meta',       f'>= {logro_pct:.0f}%'),
         (SEMAFORO_COLORS['amarillo'], 'Cerca de Meta', f'>= {logro_pct*0.8:.0f}%'),
         (SEMAFORO_COLORS['rojo'],     'Por Debajo',    f'< {logro_pct*0.8:.0f}%'),
+        (SEMAFORO_COLORS['sin_data'], 'Sin Datos',     'S/D'),
     ]
     font_b = _load_font(16)
     font_s = _load_font(13)
-    lx, ly = W - 215, H - 178
-    draw.rounded_rectangle([lx - 10, ly - 10, lx + 200, ly + 160],
+    lx, ly = W - 215, H - 210
+    draw.rounded_rectangle([lx - 10, ly - 10, lx + 200, ly + 200],
                            radius=10, fill=(10, 15, 30, 215),
                            outline=(255, 255, 255, 55), width=1)
-    draw.text((lx + 5, ly + 3), 'SEMAFORO', font=font_b, fill=(150, 200, 255, 255))
+    draw.text((lx + 5, ly + 3), 'RENDIMIENTO', font=font_b, fill=(150, 200, 255, 255))
+    draw.text((lx + 5, ly + 22), 'por provincia', font=font_s, fill=(120, 160, 210, 200))
     for i, (color, label, rango) in enumerate(items):
-        iy = ly + 35 + i * 40
+        iy = ly + 45 + i * 38
         draw.rounded_rectangle([lx + 4, iy, lx + 26, iy + 22], radius=5,
                                 fill=color + (230,))
         draw.text((lx + 34, iy + 2),  label, font=font_b, fill=(255, 255, 255, 255))

@@ -32,6 +32,21 @@ button[aria-expanded] > span {
 [data-testid="stSidebar"] * { color: #E8EAF0 !important; }
 [data-testid="stSidebarNav"] a { color: #E8EAF0 !important; font-weight: 500; }
 
+/* ── LOGO ARRIBA: reordenar sidebar para que el bloque DIRESA
+       aparezca ANTES del menú de páginas auto-generado por Streamlit ── */
+[data-testid="stSidebarContent"] {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    height: 100% !important;
+}
+[data-testid="stSidebarNav"] {
+    order: 50 !important;           /* empuja el nav debajo del contenido custom */
+    border-top: 1px solid rgba(255,255,255,0.18) !important;
+    margin-top: 6px !important;
+    padding-top: 6px !important;
+}
+
 .header-diresa {
     background: linear-gradient(90deg, #003087 0%, #00843D 100%);
     border-radius: 14px;
