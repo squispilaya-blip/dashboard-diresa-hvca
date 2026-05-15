@@ -1,24 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Round');
 
 /* Aplicar Inter a todo el contenido */
 * {
     font-family: 'Inter', sans-serif !important;
 }
 
-/* Restaurar Material Icons — especificidad [0,1,1] > [0,0,0] del * anterior */
-.material-icons, .material-icons-round, .material-icons-outlined,
+/* ── Restaurar Material Icons ──────────────────────────────────────────────
+   Cubre todos los lugares donde Streamlit usa iconos de Material Icons:
+   • Botón colapsar/expandir sidebar  (double_arrow_right / keyboard_double_arrow_right)
+   • Breadcrumb de navegación         (double_arrow_right entre páginas)
+   • Expander toggle                  (arrow_right / expand_more)
+   • Botones de cabecera genéricos
+   Especificidad mínima [0,1,1] > [0,0,0] de la regla * anterior
+   ─────────────────────────────────────────────────────────────────────── */
+.material-icons,
+.material-icons-round,
+.material-icons-outlined,
+/* Sidebar colapsar / expandir */
 [data-testid="stSidebarCollapseButton"] span,
 [data-testid="stSidebarCollapseButton"] > *,
 [data-testid="collapsedControl"] span,
 [data-testid="collapsedControl"] > *,
+/* Breadcrumb de Streamlit (double_arrow_right entre páginas) */
+[data-testid="stBreadcrumbs"] span,
+[data-testid="stBreadcrumbs"] *,
+[data-testid="stBreadcrumbLink"] span,
+header nav span,
+header [role="navigation"] span,
+/* Expander toggle (arrow_right / expand_more al lado del título) */
+details > summary button span,
+details > summary > button > span,
+[data-testid="stExpanderToggleIcon"],
+[data-testid="stExpanderToggleIcon"] span,
+/* Botones de cabecera genéricos de Streamlit */
 button[kind="header"] span,
 button[aria-expanded] > span {
     font-family: 'Material Icons Round', 'Material Icons' !important;
     font-feature-settings: 'liga' !important;
     -webkit-font-feature-settings: 'liga' !important;
-    font-size: 24px !important;
+    font-size: inherit !important;   /* NO forzar 24px — cada contexto define su tamaño */
     text-rendering: optimizeLegibility !important;
+    letter-spacing: normal !important;
+}
+
+/* Los botones de sidebar sí usan 24px fijos */
+[data-testid="stSidebarCollapseButton"] span,
+[data-testid="collapsedControl"] span {
+    font-size: 24px !important;
 }
 
 [data-testid="stAppViewContainer"] {
