@@ -156,7 +156,7 @@ c_info, c_up = st.columns([1, 2])
 with c_info:
     st.info("""
 **¿Cómo actualizar el dashboard?**
-1. Recibe los nuevos Excel de MINSA cada mes
+1. Descarga los reportes desde el [Portal de Indicadores DIRESA Huancavelica](https://sites.google.com/saludhuancavelica.pe/indicadores-diresa-hvca/indicadores-de-desempe%C3%B1o-minsa)
 2. Cárgalos aquí — reemplazan los anteriores
 3. ¡El dashboard se actualiza automáticamente!
 
