@@ -80,17 +80,17 @@
     margin: 8px 0;
 }
 
+/* ── Quitar padding superior excesivo del sidebar ─────────────────────── */
+[data-testid="stSidebarContent"]              { padding-top: 0 !important; }
+section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
+
 /* ── Reducir espacio en widgets del sidebar ───────────────────────────── */
 [data-testid="stSidebar"] .stSelectbox       { margin-bottom: 2px !important; }
 [data-testid="stSidebar"] .stMultiSelect     { margin-bottom: 2px !important; }
 [data-testid="stSidebar"] div[data-baseweb]  { margin-top: 0 !important; }
 
-/* Eliminar gap entre elementos del sidebar (contenedor flex de Streamlit) */
-[data-testid="stSidebar"] .stVerticalBlock   { gap: 0 !important; }
-[data-testid="stSidebar"] .element-container { margin-bottom: 0 !important; padding-bottom: 0 !important; }
-[data-testid="stSidebarContent"] > div > div { gap: 0 !important; }
-
-[data-testid="stSidebar"] .stPageLink        { margin: 0 !important; padding: 1px 0 !important; }
+/* Solo reducir gap de los page-links, sin afectar títulos de sección */
+[data-testid="stSidebar"] .stPageLink        { margin: 0 !important; padding: 2px 0 !important; }
 [data-testid="stSidebar"] .stPageLink a      { padding: 5px 8px !important;
                                                border-radius: 7px !important;
                                                font-size: 0.85rem !important;
