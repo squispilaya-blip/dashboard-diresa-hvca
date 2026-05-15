@@ -81,8 +81,11 @@
 }
 
 /* ── Quitar padding superior excesivo del sidebar ─────────────────────── */
-[data-testid="stSidebarContent"]              { padding-top: 0 !important; }
-section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
+[data-testid="stSidebar"] > div                          { padding-top: 0 !important; margin-top: 0 !important; }
+[data-testid="stSidebar"] > div > div                    { padding-top: 0.5rem !important; margin-top: 0 !important; }
+[data-testid="stSidebarContent"]                         { padding-top: 0 !important; margin-top: 0 !important; }
+[data-testid="stSidebarContent"] > div:first-child       { padding-top: 0 !important; margin-top: 0 !important; }
+[data-testid="stSidebarUserContent"]                     { padding-top: 0 !important; margin-top: 0 !important; }
 
 /* ── Reducir espacio en widgets del sidebar ───────────────────────────── */
 [data-testid="stSidebar"] .stSelectbox       { margin-bottom: 2px !important; }
