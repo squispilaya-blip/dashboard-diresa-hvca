@@ -117,14 +117,15 @@ def load_ficha(file, filename: str) -> dict | None:
                 continue
 
     if df is None:
-        # Fallback: primera hoja que no sea Hoja1
+        # Fallback: iterar todas las hojas que no sean Hoja1
         otras = [s for s in xl.sheet_names if s != 'Hoja1']
-        if otras:
+        for sheet in otras:
             try:
-                df = xl.parse(otras[0])
+                df = xl.parse(sheet)
+                break
             except Exception:
-                return None
-        else:
+                continue
+        if df is None:
             return None
     if logro is None:
         logro = meta.get('logro_default')

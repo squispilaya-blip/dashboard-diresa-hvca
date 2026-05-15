@@ -104,8 +104,6 @@ if not fichas:
     st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
     st.stop()
 
-ids = sorted(fichas.keys())
-
 # ── Filtrado ──────────────────────────────────────────────────────────────────
 df_f = df_base
 if red_sel   != 'Todas': df_f = df_f[df_f['red']      == red_sel]
