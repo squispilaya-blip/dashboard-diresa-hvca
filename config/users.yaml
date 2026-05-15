@@ -1,3 +1,7 @@
+cookie:
+  expiry_days: 30
+  key: diresa_hvca_2026_secret_key_xk9
+  name: diresa_hvca_auth
 credentials:
   usernames:
     admin:
@@ -5,10 +9,61 @@ credentials:
       failed_login_attempts: 0
       logged_in: false
       name: Administrador DIRESA
-      password: "$2b$12$g5KciqmPnbZXI0/aDlCp5eJuTsEHPCOipQq3jIS4LUCrLto0AgWc."
+      password: $2b$12$g5KciqmPnbZXI0/aDlCp5eJuTsEHPCOipQq3jIS4LUCrLto0AgWc.
       role: admin
-
-cookie:
-  expiry_days: 30
-  key: diresa_hvca_2026_secret_key_xk9
-  name: diresa_hvca_auth
+    cynthia.anchante:
+      email: cynthiacj32@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Cynthia Jannet Anchante
+      password: $2b$12$lIWGdIQoFBzvpN9ID/0bFOnUAgHhzdtammf3K6.LVsrWOausHOeEu
+      role: user
+    dannya.gomez:
+      email: dannyagomezcuraca01@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Dannya Gomez Curaca
+      password: $2b$12$CwU/mrWm3JBdovdIWnUVkOwL1aogNYI6vJIMep/KwCqy.izdUMmtu
+      role: user
+    edith.barnia:
+      email: edithdiresa0412@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Edith Barnia Ayme Bustamante
+      password: $2b$12$PeITLZvwHmm.86HmVvsmAusqk.qm29etUq.XCm09XLEcpJ48db3se
+      role: user
+    elizabeth.aponte:
+      email: amazonas78.eva2@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Elizabeth Aponte Vilca
+      password: $2b$12$yIvbIrdgkyoviylgmca/W.4sW22wLqIM44bqqYrGvrFzT1mQWUMdy
+      role: user
+    elmer.saravia:
+      email: elmersaraviagomez@22gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Elmer Saravia Gomez
+      password: $2b$12$VfYcLW6q1omcu1RwQzu1COt9XPgHBm0db/kk1DKVnuCMvkt1A33oq
+      role: user
+    jhonatan.puza:
+      email: jhonatan.pilo.29@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Jhonatan Federico Puza
+      password: $2b$12$jUzFdvgvhSbXkHX8GWrqyutYxUF3.de1d20OCBaqbndc2KJn7C3sy
+      role: user
+    luis.rodriguez:
+      email: lersgestion@hotmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Luis Enrique Rodriguez Soriano
+      password: $2b$12$a79sGoChltq8v/jUR2j2suWrP4UhQnoLl.bvKotm7/5zXsYd/QoK.
+      role: user
+    yuliana.ureta:
+      email: yulianaurepo.rishvca@gmail.com
+      failed_login_attempts: 0
+      logged_in: false
+      name: Yuliana Ureta Poma
+      password: $2b$12$4xVbXvskBsCh.QEDUl74OejkQ6sJfnQJjzymHTO4K0DUN.Onfapom
+      role: user
