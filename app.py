@@ -1,5 +1,6 @@
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 import streamlit as st
 import pandas as pd
@@ -33,6 +34,11 @@ def _shared_fichas() -> dict:
 def _hash_cache() -> dict:
     """Cache MD5→ficha. Evita reprocesar el mismo Excel en el servidor."""
     return {}
+
+@st.cache_resource
+def _shared_meta() -> dict:
+    """Metadatos de la última carga: fecha, cantidad de fichas, usuario."""
+    return {'fecha': None, 'fichas_n': 0, 'usuario': ''}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -232,6 +238,11 @@ Puedes cargar múltiples archivos a la vez.
         if nuevas:        partes.append(f'{nuevas} nuevo(s)')
         if desde_cache:   partes.append(f'{desde_cache} ya procesado(s) — sin reprocesar')
         if partes:
+            # Guardar metadatos de la última actualización
+            meta = _shared_meta()
+            meta['fecha']    = datetime.now().strftime('%d/%m/%Y a las %H:%M')
+            meta['fichas_n'] = len(_shared)
+            meta['usuario']  = st.session_state.get('usuario', 'Admin')
             st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s). '
                        f'Todos los usuarios ya pueden ver los datos.')
         if errores:
@@ -240,10 +251,107 @@ Puedes cargar múltiples archivos a la vez.
 
 
 # ══════════════════════════════════════════════════════════════════
-#  RESUMEN DE INDICADORES — visible para todos los usuarios
+#  PANTALLA PRINCIPAL — visible para TODOS los usuarios
 # ══════════════════════════════════════════════════════════════════
+meta = _shared_meta()
+
+# ── Banda: última actualización ───────────────────────────────────
+if meta['fecha']:
+    st.markdown(f"""
+<div style="display:flex;align-items:center;gap:14px;
+            background:rgba(0,132,61,0.12);border:1.5px solid #00843D;
+            border-radius:12px;padding:12px 20px;margin-bottom:18px;">
+  <div style="font-size:1.8rem">🕐</div>
+  <div>
+    <div style="color:#2DC653;font-weight:700;font-size:0.85rem;
+                text-transform:uppercase;letter-spacing:0.06em;">
+      Última actualización de datos</div>
+    <div style="color:#E8EAF0;font-size:1rem;font-weight:600;">
+      {meta['fecha']} &nbsp;·&nbsp; {meta['fichas_n']} indicadores cargados</div>
+    <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px;">
+      📅 Los datos se actualizan el <b style="color:rgba(255,255,255,0.75);">
+      15 de cada mes</b> con los reportes oficiales del portal MINSA.</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+else:
+    st.markdown("""
+<div style="display:flex;align-items:center;gap:14px;
+            background:rgba(255,183,3,0.10);border:1.5px solid #FFB703;
+            border-radius:12px;padding:12px 20px;margin-bottom:18px;">
+  <div style="font-size:1.8rem">⏳</div>
+  <div>
+    <div style="color:#FFB703;font-weight:700;font-size:0.85rem;
+                text-transform:uppercase;letter-spacing:0.06em;">
+      Carga pendiente</div>
+    <div style="color:#E8EAF0;font-size:0.95rem;">
+      El administrador aún no ha cargado los datos de este mes.</div>
+    <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px;">
+      📅 Los datos se actualizan el <b style="color:rgba(255,255,255,0.75);">
+      15 de cada mes</b>. Vuelve a intentarlo más tarde.</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+# ── Guía de uso (siempre visible) ─────────────────────────────────
+st.markdown('<div class="seccion-titulo">📖 ¿Cómo usar el dashboard?</div>',
+            unsafe_allow_html=True)
+st.markdown("""
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+
+  <div style="background:linear-gradient(135deg,#112240,#1a3460);
+              border-radius:14px;padding:20px;border-left:4px solid #003087;
+              display:flex;flex-direction:column;gap:8px;">
+    <div style="font-size:2rem">📊</div>
+    <div style="color:#F5A623;font-weight:700;font-size:0.75rem;
+                text-transform:uppercase;letter-spacing:0.08em;">Paso 1</div>
+    <div style="color:#E8EAF0;font-weight:700;font-size:1rem;">Resumen General</div>
+    <div style="color:#8892a4;font-size:0.82rem;line-height:1.5;">
+      Ve el estado de los <b style="color:#E8EAF0;">16 indicadores</b> de un solo vistazo.
+      Cada tarjeta muestra el avance actual y si está en meta (🟢), cerca (🟡) o por debajo (🔴).
+    </div>
+    <div style="margin-top:6px;color:#2DC653;font-size:0.78rem;">
+      👈 Menú lateral → <b>Resumen General</b>
+    </div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#112240,#1a3460);
+              border-radius:14px;padding:20px;border-left:4px solid #00843D;
+              display:flex;flex-direction:column;gap:8px;">
+    <div style="font-size:2rem">🔍</div>
+    <div style="color:#F5A623;font-weight:700;font-size:0.75rem;
+                text-transform:uppercase;letter-spacing:0.08em;">Paso 2</div>
+    <div style="color:#E8EAF0;font-weight:700;font-size:1rem;">Detalle por Indicador</div>
+    <div style="color:#8892a4;font-size:0.82rem;line-height:1.5;">
+      Haz clic en <b style="color:#E8EAF0;">"Ver detalle"</b> en cualquier tarjeta.
+      Filtra por Red, Microred o Establecimiento y revisa la lista de pacientes pendientes.
+    </div>
+    <div style="margin-top:6px;color:#2DC653;font-size:0.78rem;">
+      👆 Clic en cualquier tarjeta del Resumen
+    </div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#112240,#1a3460);
+              border-radius:14px;padding:20px;border-left:4px solid #F5A623;
+              display:flex;flex-direction:column;gap:8px;">
+    <div style="font-size:2rem">📥</div>
+    <div style="color:#F5A623;font-weight:700;font-size:0.75rem;
+                text-transform:uppercase;letter-spacing:0.08em;">Paso 3</div>
+    <div style="color:#E8EAF0;font-weight:700;font-size:1rem;">Descargar Reportes</div>
+    <div style="color:#8892a4;font-size:0.82rem;line-height:1.5;">
+      Dentro del detalle puedes exportar la información filtrada en
+      <b style="color:#E8EAF0;">Excel</b> o <b style="color:#E8EAF0;">PDF</b>
+      para presentar en reuniones o enviar a tu equipo.
+    </div>
+    <div style="margin-top:6px;color:#2DC653;font-size:0.78rem;">
+      📋 Botones de descarga en la pestaña Análisis
+    </div>
+  </div>
+
+</div>
+""", unsafe_allow_html=True)
+
+# ── Tabla resumen de indicadores ──────────────────────────────────
 if _shared:
-    st.markdown('<div class="seccion-titulo">📋 Indicadores Cargados</div>',
+    st.markdown('<div class="seccion-titulo">📋 Indicadores Disponibles</div>',
                 unsafe_allow_html=True)
     rows = []
     for fid, f in sorted(_shared.items()):
@@ -254,7 +362,7 @@ if _shared:
         color = get_semaforo_color(pct, f.get('logro'))
         emoji = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
         rows.append({'ID': fid,
-                     'Indicador': f'{f["icono"]} {f["titulo"][:52]}',
+                     'Indicador': f'{f["icono"]} {f["titulo"][:60]}',
                      'Meta': f['logro_str'],
                      'Den.': f'{den:,}', 'Num.': f'{num:,}',
                      '% Avance': f'{pct*100:.1f}%', 'Estado': emoji})
@@ -271,22 +379,13 @@ if _shared:
     m1.metric('Indicadores cargados', total)
     m2.metric('En meta o superando 🟢', verdes)
     m3.metric('Por debajo de meta 🔴', rojos)
-    st.info('👈 Usa el menú lateral para navegar al Resumen General o Detalle por Indicador.')
-
+    st.info('👈 Usa el menú lateral para ir al **Resumen General** '
+            'o haz clic en "Ver detalle" desde las tarjetas.')
 else:
-    # Sin datos cargados
     if is_admin():
         st.markdown("""
-<div style="text-align:center;padding:60px 20px;color:#8892a4;">
-  <div style="font-size:4.5rem">📂</div>
-  <h3 style="color:#E8EAF0;margin-top:12px;">Aún no has cargado ningún indicador</h3>
-  <p>Sube los archivos Excel de las fichas DL 1153 2026 para comenzar</p>
-</div>""", unsafe_allow_html=True)
-    else:
-        st.markdown("""
-<div style="text-align:center;padding:60px 20px;color:#8892a4;">
-  <div style="font-size:4.5rem">⏳</div>
-  <h3 style="color:#E8EAF0;margin-top:12px;">El administrador aún no ha cargado los datos</h3>
-  <p>Los indicadores estarán disponibles en cuanto el administrador suba los archivos Excel.</p>
-  <p style="margin-top:8px;font-size:0.85rem;">Intenta recargar la página en unos minutos.</p>
+<div style="text-align:center;padding:40px 20px;color:#8892a4;">
+  <div style="font-size:3.5rem">📂</div>
+  <h3 style="color:#E8EAF0;margin-top:10px;">Aún no has cargado ningún indicador</h3>
+  <p>Usa la sección de carga (arriba) para subir los archivos Excel.</p>
 </div>""", unsafe_allow_html=True)
