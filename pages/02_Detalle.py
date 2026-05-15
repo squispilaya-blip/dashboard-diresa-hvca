@@ -106,9 +106,12 @@ if tipo == 'promedio':
     emoji     = '⏱️'
     estado_txt = f'PROM: {pct_t:.2f} {unidad}'
 elif tipo == 'tasa':
-    color      = 'verde' if pct_t > 0 else 'rojo'
-    emoji      = '📊'
-    estado_txt = f'TASA: {pct_t:.1f} x10k'
+    umbral_v    = ficha.get('umbral', 10)
+    logro_tasa_v= ficha.get('logro_tasa', 100)
+    pct_cumpl   = min(1.0, max(0.0, (pct_t - umbral_v) / max(1, logro_tasa_v - umbral_v)))
+    color       = get_semaforo_color(pct_cumpl, 1.0)
+    emoji       = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
+    estado_txt  = f'{pct_cumpl*100:.0f}% cumpl. (tasa {pct_t:.1f})'
 else:
     color      = get_semaforo_color(pct_t, logro)
     emoji      = '🟢' if color == 'verde' else ('🟡' if color == 'amarillo' else '🔴')
@@ -140,9 +143,12 @@ if tipo == 'promedio':
     m3.metric(f'Promedio ({unidad})', f'{pct_t:.2f} {unidad}')
     m4.metric('Referidos totales', f'{den_t:,}')
 elif tipo == 'tasa':
-    m3.metric('Tasa (×10,000)', f'{pct_t:.2f}')
-    n_eess = df_f['eess'].nunique() if 'eess' in df_f.columns else 0
-    m4.metric('Establecimientos', f'{n_eess:,}')
+    umbral_v     = ficha.get('umbral', 10)
+    logro_tasa_v = ficha.get('logro_tasa', 100)
+    pct_cumpl    = min(1.0, max(0.0, (pct_t - umbral_v) / max(1, logro_tasa_v - umbral_v)))
+    m3.metric('Tasa (×10,000)', f'{pct_t:.1f}')
+    m4.metric('% Cumplimiento', f'{pct_cumpl*100:.0f}%',
+              delta=f'Logro={logro_tasa_v} | Umbral={umbral_v}')
 else:
     m3.metric('% Avance', f'{pct_t*100:.1f}%')
     pendientes = den_t - num_t
@@ -204,8 +210,17 @@ with tabs[0]:
                 tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
             col_cfg = {f'Promedio ({unidad})': st.column_config.NumberColumn(format='%.2f')}
         elif tipo == 'tasa':
-            tbl['Tasa (×10k)'] = np.where(tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(2), 0)
-            col_cfg = {'Tasa (×10k)': st.column_config.NumberColumn(format='%.2f')}
+            umbral_v     = ficha.get('umbral', 10)
+            logro_tasa_v = ficha.get('logro_tasa', 100)
+            tbl['Tasa (×10k)'] = np.where(tbl['DEN'] > 0, (tbl['NUM']/tbl['DEN']).round(1), 0)
+            tbl['% Cumpl.']    = tbl['Tasa (×10k)'].apply(
+                lambda t: f"{min(100, max(0, (t-umbral_v)/(logro_tasa_v-umbral_v)*100)):.0f}%"
+            )
+            tbl['Estado']      = tbl['Tasa (×10k)'].apply(
+                lambda t: '🟢 En meta' if t >= logro_tasa_v
+                          else ('🟡 Cerca' if t >= logro_tasa_v * 0.8 else '🔴 Bajo umbral')
+            )
+            col_cfg = {'Tasa (×10k)': st.column_config.NumberColumn(format='%.1f')}
         else:
             tbl['% Avance'] = np.where(tbl['DEN'] > 0,
                                        (tbl['NUM']/tbl['DEN']*100).round(1), 0)

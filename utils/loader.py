@@ -109,16 +109,37 @@ def load_ficha(file, filename: str) -> dict | None:
             df = df[df[fcol] == fval].copy()
 
     df_norm = normalize_df(df, ficha_id)
-    tipo   = meta.get('tipo', 'pct')      # 'pct' | 'promedio' | 'tasa'
-    unidad = meta.get('unidad', '%')      # '%' | 'hrs' | etc.
+    tipo      = meta.get('tipo', 'pct')   # 'pct' | 'promedio' | 'tasa'
+    unidad    = meta.get('unidad', '%')   # '%' | 'hrs' | 'x10k'
+    umbral    = meta.get('umbral', None)
+    logro_tasa= meta.get('logro_tasa', None)
+
+    # Para tipo='tasa': calcular % cumplimiento = (tasa-umbral)/(logro_tasa-umbral)
+    # y usarlo como logro efectivo para el semaforo
+    logro_efectivo = logro
+    logro_str_efectivo = f'{logro*100:.0f}%' if logro else 'N/D'
+    if tipo == 'tasa' and umbral is not None and logro_tasa is not None:
+        # tasa total = num/den sobre todo el df
+        d_total = int(df_norm['den'].sum())
+        n_total = int(df_norm['num'].sum())
+        tasa_total = n_total / d_total if d_total > 0 else 0
+        pct_cumpl = min(1.0, max(0.0,
+                        (tasa_total - umbral) / (logro_tasa - umbral)))
+        # Guardamos en un campo extra del df para uso en mapas/graficos
+        df_norm['_cumplimiento'] = pct_cumpl
+        logro_efectivo     = 1.0          # logro = 100% cumplimiento
+        logro_str_efectivo = f'Tasa {logro_tasa} (umbral {umbral})'
+
     return {
         'id':         ficha_id,
         'titulo':     titulo or meta.get('nombre', f'Indicador {ficha_id}'),
-        'logro':      logro,
-        'logro_str':  f'{logro*100:.0f}%' if logro else 'N/D',
+        'logro':      logro_efectivo,
+        'logro_str':  logro_str_efectivo,
         'icono':      meta.get('icono', '📊'),
         'tipo':       tipo,
         'unidad':     unidad,
+        'umbral':     umbral,
+        'logro_tasa': logro_tasa,
         'df':         df_norm,
         'has_nombres': df_norm['nombres'].str.len().gt(0).any(),
         'has_numdoc':  df_norm['num_doc'].str.len().gt(0).any(),

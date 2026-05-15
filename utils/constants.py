@@ -35,11 +35,16 @@ INDICADORES = {
            'tipo': 'promedio', 'unidad': 'hrs'},   # num/den = promedio horas de espera
     '32': {'nombre': 'Telemedicina',                 'logro_default': None, 'icono': '📱',
            'tipo': 'tasa', 'unidad': 'x10k',
-           # num = (TeleInterconsulta×6/4 + TeleConsulta×1/3 + TeleMonitoreo×30/72)×10000
-           # den = PoblacionAsignada (1er nivel) o Atenciones (2do/3er nivel)
-           # TASA = num/den  (ponderada × 10,000)
-           # El sheet1 mezcla 'Indicador A' (EESS) y 'Poblacion B' (ref); usar solo Indicador A
-           'sheet_filter': {'col': 'Indicador', 'val': 'Indicador A'}},
+           # Ficha técnica oficial (Anexo I 2026, pág. 78):
+           #   num = (TeleInterconsulta×6/4 + TeleConsulta×1/3 + TeleMonitoreo×30/72)×10,000
+           #   den = Poblacion asignada (1er nivel) | Atenciones (2do/3er nivel)
+           #   TASA = num/den
+           #   Valor umbral   = 10   (tasa minima)
+           #   Logro esperado = 100  (tasa objetivo)
+           #   % Cumplimiento = (tasa - umbral) / (logro_tasa - umbral) x 100, cap 100%
+           'sheet_filter': {'col': 'Indicador', 'val': 'Indicador A'},
+           'umbral':     10,
+           'logro_tasa': 100},
 }
 
 # Mapeo: columna estándar → variantes encontradas en los 16 Excel
