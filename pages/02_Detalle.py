@@ -273,7 +273,8 @@ if has_pacientes:
         st.caption('Pacientes que **aún no han cumplido** el indicador (num = 0) para el filtro actual.')
 
         # Ordenar por mes, red, establecimiento desde el inicio
-        df_pend = (df_f[df_f['num'] == 0]
+        # den > 0: solo pacientes que están en el denominador del indicador
+        df_pend = (df_f[(df_f['num'] == 0) & (df_f['den'] > 0)]
                    .sort_values([c for c in ['mes', 'red', 'eess'] if c in df_f.columns])
                    .copy())
 
@@ -289,16 +290,38 @@ if has_pacientes:
             )
             df_pend = df_pend[mask]
 
-        # ── Sub-filtro por EESS dentro de pendientes ───────────────────────
+        # ── Sub-filtros: EESS y Seguro dentro de pendientes ───────────────
         eess_pend_opts = _limpiar_opciones(df_pend['eess']) if not df_pend.empty else []
-        if eess_pend_opts:
+        seguros_pend_opts = (
+            _limpiar_opciones(df_pend['seguro'])
+            if (ficha.get('has_seguro') and not df_pend.empty)
+            else []
+        )
+
+        if eess_pend_opts or seguros_pend_opts:
             pa, pb = st.columns(2)
-            with pa:
-                eess_pend = st.selectbox('Filtrar por Establecimiento',
-                                         ['Todos'] + eess_pend_opts,
-                                         key=f'eess_pend_{fid}')
-            if eess_pend != 'Todos':
-                df_pend = df_pend[df_pend['eess'] == eess_pend]
+
+            if eess_pend_opts:
+                with pa:
+                    eess_pend = st.selectbox('Filtrar por Establecimiento',
+                                             ['Todos'] + eess_pend_opts,
+                                             key=f'eess_pend_{fid}')
+                if eess_pend != 'Todos':
+                    df_pend = df_pend[df_pend['eess'] == eess_pend]
+
+            if seguros_pend_opts:
+                # Defaultea a MINSA si existe; si no, muestra Todos
+                _seg_default = 'MINSA' if 'MINSA' in seguros_pend_opts else 'Todos'
+                _seg_lista   = ['Todos'] + seguros_pend_opts
+                with pb:
+                    seguro_pend = st.selectbox(
+                        '🏥 Filtrar por Seguro',
+                        _seg_lista,
+                        index=_seg_lista.index(_seg_default),
+                        key=f'seguro_pend_{fid}',
+                    )
+                if seguro_pend != 'Todos':
+                    df_pend = df_pend[df_pend['seguro'] == seguro_pend]
 
         # ── Métricas de pendientes ─────────────────────────────────────────
         c1, c2, c3 = st.columns(3)
