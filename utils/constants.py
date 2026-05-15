@@ -77,6 +77,21 @@ COLUMN_MAP = {
     'nombres':   ['nombres'],
     'den':       ['den', 'Den', 'Denominador', 'DENOMINADOR'],
     'num':       ['num', 'Num', 'Numerador', 'NUMERADOR'],
+    # ── Columnas adicionales de contexto clínico ──────────────────────────
+    # fecha_nac: Fichas 01, 02, 03, 06
+    'fecha_nac':  ['fecha_nac', 'Fecha_Nac', 'FECHA_NAC', 'fecha_nacimiento', 'Fecha_Nacimiento'],
+    # fecha_dx: diagnóstico (F01,F04), parto (F13), referencia (F12), dx depresión (F19)
+    'fecha_dx':   ['fecha_dx', 'Fecha_Dx', 'FECHA_DX', 'fecha_parto', 'Fecha_Parto',
+                   'Fecha_Referencia', 'fecha_referencia',
+                   'fecha_diagnostico', 'Fecha_diagnostico', 'FECHA_DIAGNOSTICO'],
+    # genero: Fichas 10, 11, 16, 19
+    'genero':     ['genero', 'Genero', 'GENERO', 'id_genero', 'sexo', 'Sexo', 'SEXO'],
+    # seguro: Fichas 01, 02
+    'seguro':     ['seguro', 'Seguro', 'SEGURO', 'tipo_seguro'],
+    # categoria: categoría del EESS — Fichas 04, 06, 10, 11, 12, 17, 25
+    'categoria':  ['Categoria', 'CATEGORIA', 'cat_estab', 'CAT_ESTAB', 'Categoria_Estab'],
+    # edad: Ficha 16 (VPH — niños de 9 años)
+    'edad':       ['edad', 'Edad', 'EDAD'],
 }
 
 PROVINCIAS_HVCA = [

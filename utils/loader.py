@@ -52,9 +52,20 @@ def normalize_df(df: pd.DataFrame, ficha_id: str) -> pd.DataFrame:
     result['mes'] = pd.to_numeric(result['mes'], errors='coerce').fillna(0).astype(int)
     result['pct'] = np.where(result['den'] > 0, result['num'] / result['den'], 0.0)
     _NAN_VALS = {'NAN', 'NONE', 'N/A', 'NA', '#N/A', '#VALUE!', 'NULL', '0.0', 'NAN '}
-    for col in ['red', 'microred', 'eess', 'provincia', 'nombres', 'num_doc']:
+    # Columnas de texto → limpiar y convertir a MAYÚSCULAS
+    for col in ['red', 'microred', 'eess', 'provincia', 'nombres', 'num_doc',
+                'genero', 'seguro', 'categoria']:
         s = result[col].fillna('').astype(str).str.strip().str.upper()
         result[col] = s.where(~s.isin(_NAN_VALS), '')
+    # Columnas de fecha → conservar formato original (no mayúsculas)
+    for col in ['fecha_nac', 'fecha_dx']:
+        s = result[col].fillna('').astype(str).str.strip()
+        # Convertir timestamps "2026-01-15 00:00:00" → "2026-01-15"
+        s = s.str.replace(r'\s+00:00:00$', '', regex=True)
+        result[col] = s.where(~s.str.upper().isin(_NAN_VALS), '')
+    # Edad → número entero como cadena (quitar ".0" de float)
+    s = result['edad'].fillna('').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    result['edad'] = s.where(~s.isin(_NAN_VALS), '')
     result['ficha_id'] = ficha_id
     return result.reset_index(drop=True)
 
@@ -171,10 +182,17 @@ def load_ficha(file, filename: str) -> dict | None:
         'umbral':     umbral,
         'logro_tasa': logro_tasa,
         'df':         df_norm,
-        'has_nombres': df_norm['nombres'].str.len().gt(0).any(),
-        'has_numdoc':  df_norm['num_doc'].str.len().gt(0).any(),
-        'has_red':     df_norm['red'].str.len().gt(0).any(),
-        'has_eess':    df_norm['eess'].str.len().gt(0).any(),
+        'has_nombres':   df_norm['nombres'].str.len().gt(0).any(),
+        'has_numdoc':    df_norm['num_doc'].str.len().gt(0).any(),
+        'has_red':       df_norm['red'].str.len().gt(0).any(),
+        'has_eess':      df_norm['eess'].str.len().gt(0).any(),
+        # Columnas clínicas adicionales
+        'has_fecha_nac': df_norm['fecha_nac'].str.len().gt(0).any(),
+        'has_fecha_dx':  df_norm['fecha_dx'].str.len().gt(0).any(),
+        'has_genero':    df_norm['genero'].str.len().gt(0).any(),
+        'has_seguro':    df_norm['seguro'].str.len().gt(0).any(),
+        'has_categoria': df_norm['categoria'].str.len().gt(0).any(),
+        'has_edad':      df_norm['edad'].str.len().gt(0).any(),
     }
 
 

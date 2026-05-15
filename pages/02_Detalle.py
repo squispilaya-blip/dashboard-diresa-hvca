@@ -156,7 +156,10 @@ else:
               delta_color='inverse')
 
 # ── Tabs: Análisis | Pacientes ────────────────────────────────────────────────
-has_pacientes = ficha['has_numdoc'] or ficha['has_nombres']
+has_pacientes = (ficha['has_numdoc'] or ficha['has_nombres']
+                 or ficha.get('has_fecha_nac') or ficha.get('has_genero')
+                 or ficha.get('has_fecha_dx')  or ficha.get('has_seguro')
+                 or ficha.get('has_categoria') or ficha.get('has_edad'))
 tab_labels = ['📊 Análisis por Red / EESS', '👥 Pacientes Pendientes'] if has_pacientes else ['📊 Análisis por Red / EESS']
 tabs = st.tabs(tab_labels)
 
@@ -305,12 +308,27 @@ if has_pacientes:
                   f'{len(df_pend)/den_t*100:.1f}%' if den_t > 0 else 'N/A')
 
         # ── Columnas a mostrar ─────────────────────────────────────────────
+        # Base siempre presente; extras solo si el Excel de esta ficha las tiene
         SHOW_PREF = ['mes', 'red', 'microred', 'eess', 'nombres', 'num_doc', 'provincia']
+        _EXTRAS = [
+            ('fecha_nac', 'has_fecha_nac'),
+            ('genero',    'has_genero'),
+            ('seguro',    'has_seguro'),
+            ('categoria', 'has_categoria'),
+            ('fecha_dx',  'has_fecha_dx'),
+            ('edad',      'has_edad'),
+        ]
+        for col, flag in _EXTRAS:
+            if ficha.get(flag):
+                SHOW_PREF.append(col)
         SHOW = [c for c in SHOW_PREF if c in df_pend.columns]
         RENAME = {
             'mes': 'Mes', 'red': 'Red', 'microred': 'Microred',
             'eess': 'Establecimiento', 'nombres': 'Nombre Paciente',
             'num_doc': 'N° Documento', 'provincia': 'Provincia',
+            'fecha_nac': 'F. Nacimiento', 'genero': 'Género',
+            'seguro': 'Seguro', 'categoria': 'Categoría',
+            'fecha_dx': 'Fecha Dx / Ref.', 'edad': 'Edad',
         }
 
         if df_pend.empty:
