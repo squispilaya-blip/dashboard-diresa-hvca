@@ -1,21 +1,16 @@
 from datetime import datetime
 import streamlit as st
-import os, sys
+import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loader import get_semaforo_color
 from utils.charts import kpi_card_html
 from utils.map_renderer import render_map
 from utils.constants import EXCLUIR_OPCIONES
-from utils.auth import require_auth, do_logout, is_admin
+from utils.auth import require_auth
+from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
 
 st.set_page_config(page_title='Resumen General', page_icon='📊', layout='wide')
-
-def _css():
-    p = os.path.join(os.path.dirname(__file__), '..', 'assets', 'style.css')
-    if os.path.exists(p):
-        with open(p) as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-_css()
+load_css()
 
 require_auth()
 
@@ -27,19 +22,7 @@ ind_mapa   = _NONE
 
 # ── Sidebar — siempre se renderiza (antes del st.stop) ───────────────────────
 with st.sidebar:
-    st.markdown(f'''<div class="sb-brand">
-      <div style="font-size:2rem">🏥</div>
-      <div class="sb-brand-name">DIRESA<br>HUANCAVELICA</div>
-      <div class="sb-brand-sub">DL 1153 · 2026</div>
-      <div class="sb-user">👤 {st.session_state.get("user_name","")}</div>
-    </div>''', unsafe_allow_html=True)
-
-    st.markdown('<p class="sb-nav-title">NAVEGACIÓN</p>', unsafe_allow_html=True)
-    st.page_link('app.py',              label='🏠 Inicio / Carga')
-    st.page_link('pages/01_Resumen.py', label='📊 Resumen General')
-    st.page_link('pages/02_Detalle.py', label='🔍 Detalle por Indicador')
-
-    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
+    render_sidebar_brand()
 
     if fichas:
         st.markdown('<p class="sb-section-title">🌐 FILTRO DE RED</p>',
@@ -62,10 +45,7 @@ with st.sidebar:
             label_visibility='collapsed',
         )
 
-    st.markdown('<div class="sb-sep"></div>', unsafe_allow_html=True)
-    if st.button('🚪 Cerrar sesión', use_container_width=True):
-        do_logout()
-        st.switch_page('app.py')
+    render_sidebar_logout()
 
 # ── Guardia: sin fichas cargadas ──────────────────────────────────────────────
 if not fichas:
