@@ -85,20 +85,38 @@ st.markdown('<div class="seccion-titulo">🎯 Todos los Indicadores — Haz clic
             unsafe_allow_html=True)
 ids = sorted(fichas.keys())
 for i in range(0, len(ids), 4):
-    cols = st.columns(4)
-    for j, fid in enumerate(ids[i:i+4]):
+    row_ids = ids[i:i+4]
+
+    # ── Pre-calcular datos de cada tarjeta ────────────────────────────────────
+    row_data = []
+    for fid in row_ids:
         f    = fichas[fid]
         df_f = filtered_dfs[fid]
         den  = int(df_f['den'].sum())
         num  = int(df_f['num'].sum())
         pct  = num / den if den > 0 else 0
         color = get_semaforo_color(pct, f.get('logro'))
+        row_data.append((fid, f, pct, color))
+
+    # ── Renderizar las 4 tarjetas en UN solo CSS Grid ─────────────────────────
+    # display:grid garantiza que todas las celdas de la fila tengan la misma
+    # altura sin depender de los divs intermedios de Streamlit.
+    grid_html = '<div class="kpi-grid">'
+    for fid, f, pct, color in row_data:
+        grid_html += kpi_card_html(
+            f['icono'], f['titulo'], pct, f.get('logro'), color,
+            tipo=f.get('tipo', 'pct'), unidad=f.get('unidad', '%'),
+        )
+    # Celdas vacías si la última fila tiene menos de 4 indicadores
+    for _ in range(4 - len(row_ids)):
+        grid_html += '<div></div>'
+    grid_html += '</div>'
+    st.markdown(grid_html, unsafe_allow_html=True)
+
+    # ── Botones en columnas normales (alineados bajo el grid) ─────────────────
+    cols = st.columns(4)
+    for j, (fid, f, pct, color) in enumerate(row_data):
         with cols[j]:
-            st.markdown(
-                kpi_card_html(f['icono'], f['titulo'], pct, f.get('logro'), color,
-                              tipo=f.get('tipo', 'pct'), unidad=f.get('unidad', '%')),
-                unsafe_allow_html=True,
-            )
-            if st.button(f'📋 Ver detalle', key=f'btn_{fid}', use_container_width=True):
+            if st.button('📋 Ver detalle', key=f'btn_{fid}', use_container_width=True):
                 st.session_state.selected_ficha = fid
                 st.switch_page('pages/02_Detalle.py')
