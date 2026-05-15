@@ -47,7 +47,7 @@ with st.sidebar:
             'Seleccionar indicador:',
             ids,
             key='selected_ficha',          # ← Streamlit maneja el estado directamente
-            format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:26]}',
+            format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:45]}',
         )
         ficha   = fichas[fid]
         df_base = ficha['df']

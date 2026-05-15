@@ -98,7 +98,7 @@ def load_ficha(file, filename: str) -> dict | None:
             logro = extract_logro(hoja1)
             titulo_raw = str(hoja1.iloc[0, 0])
             titulo = re.sub(r'^Ficha\s*(N[°º]?\s*)?\d+[:\.\-]?\s*', '', titulo_raw,
-                            flags=re.IGNORECASE).strip()[:80]
+                            flags=re.IGNORECASE).strip()
         else:
             raise ValueError('sin Hoja1')
     except Exception:
