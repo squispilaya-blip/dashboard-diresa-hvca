@@ -19,6 +19,23 @@ load_css()
 
 
 # ══════════════════════════════════════════════════════════════════
+#  CACHÉ COMPARTIDA — UN SOLO CONJUNTO DE DATOS PARA TODOS
+#  st.cache_resource crea un singleton en el servidor.
+#  El admin lo puebla; todos los usuarios leen de aquí.
+#  Resultado: N usuarios → misma RAM que 1 usuario.
+# ══════════════════════════════════════════════════════════════════
+@st.cache_resource
+def _shared_fichas() -> dict:
+    """Diccionario global de fichas. Compartido entre TODAS las sesiones."""
+    return {}
+
+@st.cache_resource
+def _hash_cache() -> dict:
+    """Cache MD5→ficha. Evita reprocesar el mismo Excel en el servidor."""
+    return {}
+
+
+# ══════════════════════════════════════════════════════════════════
 #  PANTALLA DE LOGIN
 # ══════════════════════════════════════════════════════════════════
 if not is_authenticated():
@@ -37,7 +54,6 @@ if not is_authenticated():
         </div>
     """, unsafe_allow_html=True)
 
-    # Mensaje de error dentro de la tarjeta (persiste entre reruns via session_state)
     if st.session_state.get('login_error'):
         st.markdown("""
         <div style="background:rgba(230,57,70,0.15);border:1.5px solid #E63946;
@@ -59,23 +75,26 @@ if not is_authenticated():
 
     if submit:
         if do_login(usuario.strip(), password):
-            st.session_state.pop('login_error', None)   # limpiar error anterior
+            st.session_state.pop('login_error', None)
             st.rerun()
         else:
-            st.session_state['login_error'] = True      # guardar error → rerun muestra aviso
+            st.session_state['login_error'] = True
             st.rerun()
     st.stop()
 
 
 # ══════════════════════════════════════════════════════════════════
-#  USUARIO AUTENTICADO — Sidebar con navegación
+#  USUARIO AUTENTICADO
+#  Apuntar st.session_state.fichas al dict compartido (singleton).
+#  Así TODOS los usuarios — sin importar cuántos sean — usan la
+#  misma copia de datos en memoria.
 # ══════════════════════════════════════════════════════════════════
+_shared = _shared_fichas()
+st.session_state.fichas = _shared          # referencia directa al singleton
+
 with st.sidebar:
     render_sidebar_brand()
     render_sidebar_logout()
-
-if 'fichas' not in st.session_state:
-    st.session_state.fichas = {}
 
 # ══════════════════════════════════════════════════════════════════
 #  CABECERA
@@ -88,6 +107,7 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
+
 
 # ══════════════════════════════════════════════════════════════════
 #  PANEL DE ADMINISTRACIÓN (solo admin)
@@ -146,79 +166,87 @@ if is_admin():
         else:
             st.info('No hay usuarios adicionales para eliminar.')
 
-# ══════════════════════════════════════════════════════════════════
-#  CARGA DE INDICADORES
-# ══════════════════════════════════════════════════════════════════
-st.markdown('<div class="seccion-titulo">📤 Carga de Indicadores</div>',
-            unsafe_allow_html=True)
+    # ── Carga de archivos — SOLO ADMIN ────────────────────────────────────────
+    st.markdown('<div class="seccion-titulo">📤 Carga de Indicadores</div>',
+                unsafe_allow_html=True)
 
-c_info, c_up = st.columns([1, 2])
-with c_info:
-    st.info("""
+    c_info, c_up = st.columns([1, 2])
+    with c_info:
+        st.info("""
 **¿Cómo actualizar el dashboard?**
 1. Descarga los reportes desde el [Portal de Indicadores DIRESA Huancavelica](https://sites.google.com/saludhuancavelica.pe/indicadores-diresa-hvca/indicadores-de-desempe%C3%B1o-minsa)
-2. Cárgalos aquí — reemplazan los anteriores
+2. Cárgalos aquí — todos los usuarios verán los nuevos datos
 3. ¡El dashboard se actualiza automáticamente!
 
 Puedes cargar múltiples archivos a la vez.
 """)
-with c_up:
-    uploaded = st.file_uploader(
-        'Selecciona las fichas Excel (Ficha_01, Ficha_02 … Ficha_32)',
-        type=['xlsx'],
-        accept_multiple_files=True,
-        help='Arrastra aquí los archivos Excel de indicadores DL 1153 2026',
-    )
+        if _shared:
+            if st.button('🗑️ Limpiar todos los datos cargados', type='secondary',
+                         use_container_width=True,
+                         help='Borra los indicadores del servidor. Úsalo antes de cargar un nuevo mes.'):
+                _shared.clear()
+                _hash_cache().clear()
+                st.success('Datos eliminados. Carga los nuevos archivos Excel.')
+                st.rerun()
 
-if uploaded:
-    # 1. Leer bytes en el hilo principal (UploadedFile no es thread-safe)
-    files_data = [(f.read(), f.name) for f in uploaded]
+    with c_up:
+        uploaded = st.file_uploader(
+            'Selecciona las fichas Excel (Ficha_01, Ficha_02 … Ficha_32)',
+            type=['xlsx'],
+            accept_multiple_files=True,
+            help='Arrastra aquí los archivos Excel de indicadores DL 1153 2026',
+        )
 
-    # 2. Separar archivos ya procesados (caché por hash MD5) de los nuevos
-    pending, nuevas, desde_cache, errores = [], 0, 0, []
-    for fb, fn in files_data:
-        cache_key = f'_fc_{hashlib.md5(fb).hexdigest()}'
-        if cache_key in st.session_state:          # ya procesado antes
-            cached = st.session_state[cache_key]
-            if cached:
-                st.session_state.fichas[cached['id']] = cached
-                desde_cache += 1
-        else:
-            pending.append((fb, fn, cache_key))
+    if uploaded:
+        files_data = [(f.read(), f.name) for f in uploaded]
+        _hcache = _hash_cache()
 
-    # 3. Procesar archivos nuevos en paralelo
-    if pending:
-        def _procesar(args):
-            fb, fn, ck = args
-            return load_ficha_bytes(fb, fn), ck
+        pending, nuevas, desde_cache, errores = [], 0, 0, []
+        for fb, fn in files_data:
+            md5 = hashlib.md5(fb).hexdigest()
+            if md5 in _hcache:                  # ya procesado en el servidor
+                cached = _hcache[md5]
+                if cached:
+                    _shared[cached['id']] = cached
+                    desde_cache += 1
+            else:
+                pending.append((fb, fn, md5))
 
-        with st.spinner(f'Procesando {len(pending)} archivo(s) nuevos…'):
-            workers = min(len(pending), 8)
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                for result, ck in pool.map(_procesar, pending):
-                    st.session_state[ck] = result      # guardar en caché
-                    if result:
-                        st.session_state.fichas[result['id']] = result
-                        nuevas += 1
-                    else:
-                        errores.append(ck)             # nombre no disponible aquí
+        if pending:
+            def _procesar(args):
+                fb, fn, md5 = args
+                return load_ficha_bytes(fb, fn), md5
 
-    # 4. Mensajes de resultado
-    partes = []
-    if nuevas:
-        partes.append(f'{nuevas} nuevo(s)')
-    if desde_cache:
-        partes.append(f'{desde_cache} desde caché (sin reprocesar)')
-    if partes:
-        st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s).')
-    if errores:
-        st.warning(f'⚠️ {len(errores)} archivo(s) no reconocido(s) (el nombre debe incluir "Ficha_NN").')
+            with st.spinner(f'Procesando {len(pending)} archivo(s) nuevos…'):
+                workers = min(len(pending), 8)
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    for result, md5 in pool.map(_procesar, pending):
+                        _hcache[md5] = result       # guardar en caché del servidor
+                        if result:
+                            _shared[result['id']] = result
+                            nuevas += 1
+                        else:
+                            errores.append(md5)
 
-if st.session_state.fichas:
+        partes = []
+        if nuevas:        partes.append(f'{nuevas} nuevo(s)')
+        if desde_cache:   partes.append(f'{desde_cache} ya procesado(s) — sin reprocesar')
+        if partes:
+            st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s). '
+                       f'Todos los usuarios ya pueden ver los datos.')
+        if errores:
+            st.warning(f'⚠️ {len(errores)} archivo(s) no reconocido(s) '
+                       f'(el nombre debe incluir "Ficha_NN").')
+
+
+# ══════════════════════════════════════════════════════════════════
+#  RESUMEN DE INDICADORES — visible para todos los usuarios
+# ══════════════════════════════════════════════════════════════════
+if _shared:
     st.markdown('<div class="seccion-titulo">📋 Indicadores Cargados</div>',
                 unsafe_allow_html=True)
     rows = []
-    for fid, f in sorted(st.session_state.fichas.items()):
+    for fid, f in sorted(_shared.items()):
         df  = f['df']
         den = int(df['den'].sum())
         num = int(df['num'].sum())
@@ -236,18 +264,29 @@ if st.session_state.fichas:
                      '% Avance': st.column_config.TextColumn(width='small'),
                      'Meta':     st.column_config.TextColumn(width='small'),
                  })
-    total  = len(st.session_state.fichas)
+    total  = len(_shared)
     verdes = sum(1 for r in rows if r['Estado'] == '🟢')
     rojos  = sum(1 for r in rows if r['Estado'] == '🔴')
     m1, m2, m3 = st.columns(3)
     m1.metric('Indicadores cargados', total)
     m2.metric('En meta o superando 🟢', verdes)
     m3.metric('Por debajo de meta 🔴', rojos)
-    st.info('👈 Usa el menú lateral para navegar al Resumen o Detalle.')
+    st.info('👈 Usa el menú lateral para navegar al Resumen General o Detalle por Indicador.')
+
 else:
-    st.markdown("""
+    # Sin datos cargados
+    if is_admin():
+        st.markdown("""
 <div style="text-align:center;padding:60px 20px;color:#8892a4;">
   <div style="font-size:4.5rem">📂</div>
   <h3 style="color:#E8EAF0;margin-top:12px;">Aún no has cargado ningún indicador</h3>
   <p>Sube los archivos Excel de las fichas DL 1153 2026 para comenzar</p>
+</div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+<div style="text-align:center;padding:60px 20px;color:#8892a4;">
+  <div style="font-size:4.5rem">⏳</div>
+  <h3 style="color:#E8EAF0;margin-top:12px;">El administrador aún no ha cargado los datos</h3>
+  <p>Los indicadores estarán disponibles en cuanto el administrador suba los archivos Excel.</p>
+  <p style="margin-top:8px;font-size:0.85rem;">Intenta recargar la página en unos minutos.</p>
 </div>""", unsafe_allow_html=True)
