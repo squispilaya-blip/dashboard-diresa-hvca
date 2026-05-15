@@ -39,6 +39,18 @@ if not is_authenticated():
         </div>
     """, unsafe_allow_html=True)
 
+    # Mensaje de error dentro de la tarjeta (persiste entre reruns via session_state)
+    if st.session_state.get('login_error'):
+        st.markdown("""
+        <div style="background:rgba(230,57,70,0.15);border:1.5px solid #E63946;
+                    border-radius:10px;padding:11px 16px;margin-bottom:14px;
+                    color:#ff6b6b;font-size:0.85rem;text-align:center;">
+            ❌ &nbsp; <b>Usuario o contraseña incorrectos.</b><br>
+            <span style="font-size:0.78rem;opacity:0.85;">
+              Verifica tus datos e intenta nuevamente.</span>
+        </div>
+        """, unsafe_allow_html=True)
+
     with st.form('login_form', clear_on_submit=False):
         usuario  = st.text_input('👤 Usuario', placeholder='Ingresa tu usuario')
         password = st.text_input('🔑 Contraseña', type='password',
@@ -49,10 +61,11 @@ if not is_authenticated():
 
     if submit:
         if do_login(usuario.strip(), password):
-            st.success(f'¡Bienvenido, {st.session_state["user_name"]}!')
+            st.session_state.pop('login_error', None)   # limpiar error anterior
             st.rerun()
         else:
-            st.error('❌ Usuario o contraseña incorrectos.')
+            st.session_state['login_error'] = True      # guardar error → rerun muestra aviso
+            st.rerun()
     st.stop()
 
 
