@@ -291,37 +291,37 @@ if has_pacientes:
             df_pend = df_pend[mask]
 
         # ── Sub-filtros: EESS y Seguro dentro de pendientes ───────────────
+        # Las columnas se renderizan SIEMPRE para evitar el error de DOM de
+        # Streamlit cuando el árbol de widgets cambia entre reruns.
+        pa, pb = st.columns(2)
+
+        # Filtro por Establecimiento
         eess_pend_opts = _limpiar_opciones(df_pend['eess']) if not df_pend.empty else []
-        seguros_pend_opts = (
-            _limpiar_opciones(df_pend['seguro'])
-            if (ficha.get('has_seguro') and not df_pend.empty)
-            else []
-        )
-
-        if eess_pend_opts or seguros_pend_opts:
-            pa, pb = st.columns(2)
-
+        with pa:
             if eess_pend_opts:
-                with pa:
-                    eess_pend = st.selectbox('Filtrar por Establecimiento',
-                                             ['Todos'] + eess_pend_opts,
-                                             key=f'eess_pend_{fid}')
+                eess_pend = st.selectbox('Filtrar por Establecimiento',
+                                         ['Todos'] + eess_pend_opts,
+                                         key=f'eess_pend_{fid}')
                 if eess_pend != 'Todos':
                     df_pend = df_pend[df_pend['eess'] == eess_pend]
 
-            if seguros_pend_opts:
-                # Defaultea a MINSA si existe; si no, muestra Todos
-                _seg_default = 'MINSA' if 'MINSA' in seguros_pend_opts else 'Todos'
-                _seg_lista   = ['Todos'] + seguros_pend_opts
-                with pb:
-                    seguro_pend = st.selectbox(
+        # Filtro por Seguro (solo fichas con columna seguro: F01, F02)
+        with pb:
+            if ficha.get('has_seguro'):
+                seguros_pend_opts = (
+                    _limpiar_opciones(df_pend['seguro']) if not df_pend.empty else []
+                )
+                if seguros_pend_opts:
+                    _seg_lista   = ['Todos'] + seguros_pend_opts
+                    _seg_default = 'MINSA' if 'MINSA' in seguros_pend_opts else 'Todos'
+                    seguro_pend  = st.selectbox(
                         '🏥 Filtrar por Seguro',
                         _seg_lista,
                         index=_seg_lista.index(_seg_default),
                         key=f'seguro_pend_{fid}',
                     )
-                if seguro_pend != 'Todos':
-                    df_pend = df_pend[df_pend['seguro'] == seguro_pend]
+                    if seguro_pend != 'Todos':
+                        df_pend = df_pend[df_pend['seguro'] == seguro_pend]
 
         # ── Métricas de pendientes ─────────────────────────────────────────
         c1, c2, c3 = st.columns(3)
