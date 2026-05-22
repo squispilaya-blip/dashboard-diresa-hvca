@@ -255,10 +255,20 @@ with tabs[0]:
             use_container_width=True,
         )
     with d2:
+        # Periodo dinámico: se calcula según los meses reales presentes en la ficha
+        _MESES_PDF = ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                      'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
+        _meses_datos = sorted(m for m in ficha['df']['mes'].unique() if 0 < m <= 12)
+        if len(_meses_datos) >= 2:
+            _periodo = f'{_MESES_PDF[_meses_datos[0]]} - {_MESES_PDF[_meses_datos[-1]]} 2026'
+        elif len(_meses_datos) == 1:
+            _periodo = f'{_MESES_PDF[_meses_datos[0]]} 2026'
+        else:
+            _periodo = '2026'
         st.download_button(
             '📄 Descargar PDF',
             data=build_pdf_bytes(df_f, ficha['titulo'], filtro_lbl,
-                                 logro_str, 'ENERO - ABRIL 2026',
+                                 logro_str, _periodo,
                                  map_bytes=_map_bytes),
             file_name=f'Ficha{fid}_{red_sel.replace(" ","_")}.pdf',
             mime='application/pdf',

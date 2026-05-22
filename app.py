@@ -1,4 +1,5 @@
 import hashlib
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -8,6 +9,49 @@ from utils.loader import load_ficha_bytes, get_semaforo_color
 from utils.auth import (do_login, is_authenticated, is_admin,
                         list_users, add_user, delete_user)
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
+
+# ── Ruta a la carpeta de datos pre-cargados ───────────────────────────────────
+_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+
+
+def _auto_load_from_data_dir(shared: dict, hcache: dict) -> int:
+    """Carga los Excel de data/ en el dict compartido. Retorna cantidad cargada."""
+    if not os.path.isdir(_DATA_DIR):
+        return 0
+    files = sorted([
+        f for f in os.listdir(_DATA_DIR)
+        if f.startswith('Ficha_') and f.endswith('.xlsx') and not f.startswith('~')
+    ])
+    if not files:
+        return 0
+
+    pending = []
+    for fn in files:
+        fpath = os.path.join(_DATA_DIR, fn)
+        try:
+            with open(fpath, 'rb') as fp:
+                fb = fp.read()
+            md5 = hashlib.md5(fb).hexdigest()
+            if md5 in hcache and hcache[md5]:
+                shared[hcache[md5]['id']] = hcache[md5]
+            else:
+                pending.append((fb, fn, md5))
+        except Exception:
+            pass
+
+    def _proc(args):
+        fb, fn, md5 = args
+        return load_ficha_bytes(fb, fn), md5
+
+    if pending:
+        workers = min(len(pending), 8)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for result, md5 in pool.map(_proc, pending):
+                hcache[md5] = result
+                if result:
+                    shared[result['id']] = result
+
+    return len(shared)
 
 st.set_page_config(
     page_title='Dashboard DIRESA Huancavelica',
@@ -26,11 +70,6 @@ load_css()
 #  Resultado: N usuarios → misma RAM que 1 usuario.
 # ══════════════════════════════════════════════════════════════════
 @st.cache_resource
-def _shared_fichas() -> dict:
-    """Diccionario global de fichas. Compartido entre TODAS las sesiones."""
-    return {}
-
-@st.cache_resource
 def _hash_cache() -> dict:
     """Cache MD5→ficha. Evita reprocesar el mismo Excel en el servidor."""
     return {}
@@ -39,6 +78,22 @@ def _hash_cache() -> dict:
 def _shared_meta() -> dict:
     """Metadatos de la última carga: fecha, cantidad de fichas, usuario."""
     return {'fecha': None, 'fichas_n': 0, 'usuario': ''}
+
+@st.cache_resource
+def _shared_fichas() -> dict:
+    """Diccionario global de fichas. Compartido entre TODAS las sesiones.
+    Al arrancar el servidor, carga automáticamente los Excel de la carpeta data/.
+    Esto garantiza que los datos estén disponibles aunque la app haya dormido.
+    """
+    shared = {}
+    hcache = _hash_cache()
+    n = _auto_load_from_data_dir(shared, hcache)
+    if n > 0:
+        meta = _shared_meta()
+        meta['fecha']    = datetime.now().strftime('%d/%m/%Y a las %H:%M')
+        meta['fichas_n'] = n
+        meta['usuario']  = 'Sistema (auto-carga)'
+    return shared
 
 
 # ══════════════════════════════════════════════════════════════════
