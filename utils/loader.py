@@ -150,6 +150,13 @@ def load_ficha(file, filename: str) -> dict | None:
             df = df[df[fcol] == fval].copy()
 
     df_norm = normalize_df(df, ficha_id)
+
+    # Filtrar solo MINSA si la columna seguro tiene valores (DL 1153 solo MINSA)
+    if df_norm['seguro'].str.len().gt(0).any():
+        minsa_mask = df_norm['seguro'] == 'MINSA'
+        if minsa_mask.any():
+            df_norm = df_norm[minsa_mask].reset_index(drop=True)
+
     tipo      = meta.get('tipo', 'pct')   # 'pct' | 'promedio' | 'tasa'
     unidad    = meta.get('unidad', '%')   # '%' | 'hrs' | 'x10k'
     umbral    = meta.get('umbral', None)
