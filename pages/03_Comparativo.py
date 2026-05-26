@@ -475,14 +475,17 @@ st.markdown(f"""
   </div>
 </div>""", unsafe_allow_html=True)
 
+# Ficha 15 siempre muestra mensaje especial — no aplica comparativo por red
+if fid == '15':
+    st.info(
+        '🏥 **Ficha 15 — Mamografía bilateral de tamizaje**\n\n'
+        'Este indicador se mide únicamente a nivel **departamental** en el '
+        '**Hospital Departamental de Huancavelica**. No aplica comparativo por Red de Salud.'
+    )
+    st.stop()
+
 if 'red' not in df_base.columns or not df_base['red'].str.len().gt(0).any():
-    if fid == '15':
-        st.info(
-            '🏥 **Ficha 15 — Mamografía bilateral de tamizaje**\n\n'
-            'Este indicador se mide únicamente a nivel **departamental** '
-            '(Hospital Regional de Huancavelica). No aplica comparativo por Red de Salud.'
-        )
-    elif fid == '16':
+    if fid == '16':
         st.info(
             '💉 **Ficha 16 — Vacuna VPH**\n\n'
             'La base de datos con desagregación por Red está pendiente de carga. '
