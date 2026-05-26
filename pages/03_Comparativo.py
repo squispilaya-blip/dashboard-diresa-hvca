@@ -119,17 +119,26 @@ def _chart_jpg_bytes(df_agg: pd.DataFrame, colors: list,
 
 def _table_jpg_bytes(df_t: pd.DataFrame, titulo: str) -> bytes:
     """JPG de la tabla de datos generado en el servidor con matplotlib."""
+    import re
+    _emoji_re = re.compile(
+        '[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0001FA00-\U0001FA9F]+',
+        flags=re.UNICODE,
+    )
+
+    def _clean(text: str) -> str:
+        return _emoji_re.sub('', text).strip()
+
     cols = df_t.columns.tolist()
     n = len(df_t)
 
     def _fmt(v, c):
         if c == 'Cobertura %':
             try: return f'{float(v):.1f}%'
-            except: return str(v)
+            except: return _clean(str(v))
         if c in ('PROG', 'EJEC', 'Pendiente'):
             try: return f'{int(float(v)):,}'
-            except: return str(v)
-        return '' if str(v) in ('nan', 'None') else str(v)
+            except: return _clean(str(v))
+        return '' if str(v) in ('nan', 'None') else _clean(str(v))
 
     cell_data = [[_fmt(df_t[c].iloc[i], c) for c in cols] for i in range(n)]
 
@@ -176,6 +185,214 @@ def _table_jpg_bytes(df_t: pd.DataFrame, titulo: str) -> bytes:
     fig_m.savefig(buf, format='jpeg', dpi=150, bbox_inches='tight',
                   facecolor='#0d1b35', edgecolor='none')
     plt.close(fig_m)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
+                    thr_val: float, pct_dir: float,
+                    den_total: int, num_total: int,
+                    tbl_df: pd.DataFrame, fid: str, titulo: str,
+                    color_diresa_hex: str) -> bytes:
+    """JPG completo del dashboard: header + grafico + caja resumen + tabla + leyenda."""
+    import re
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.patches import FancyBboxPatch
+
+    _em = re.compile(
+        r'[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0001FA00-\U0001FA9F]+',
+        re.UNICODE,
+    )
+    def _c(t): return _em.sub('', str(t)).strip()
+
+    def _fmt_c(v, col):
+        if col == 'Cobertura %':
+            try: return f'{float(v):.1f}%'
+            except: return _c(str(v))
+        if col in ('PROG', 'EJEC', 'Pendiente'):
+            try: return f'{int(float(v)):,}'
+            except: return _c(str(v))
+        return '' if str(v) in ('nan', 'None') else _c(str(v))
+
+    n       = len(df_agg)
+    cols_t  = tbl_df.columns.tolist()
+    n_t     = len(tbl_df)
+
+    # Titulo hasta 2 lineas si es largo
+    t_clean = _c(titulo)
+    if len(t_clean) > 65:
+        sp = t_clean.rfind(' ', 0, len(t_clean) // 2 + 25)
+        t_clean = (t_clean[:sp] + '\n' + t_clean[sp+1:]) if sp > 0 else t_clean
+
+    mpl_cd = _to_mpl_color(color_diresa_hex) if color_diresa_hex and color_diresa_hex.startswith('#') else 'white'
+    bd_col = color_diresa_hex if color_diresa_hex and color_diresa_hex.startswith('#') else '#FFB703'
+    mpl_bd = _to_mpl_color(bd_col)
+
+    fig_w   = max(16, n * 1.9)
+    tbl_h_i = max(2.8, n_t * 0.40 + 1.4)
+    fig_h   = 1.4 + 5.5 + tbl_h_i + 0.55
+
+    fig = plt.figure(figsize=(fig_w, fig_h), facecolor='#0d1b35')
+    gs  = GridSpec(
+        4, 6, figure=fig,
+        height_ratios=[1.4, 5.5, tbl_h_i, 0.55],
+        hspace=0.18, wspace=0.10,
+        left=0.04, right=0.98, top=0.97, bottom=0.02,
+    )
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    ax_h = fig.add_subplot(gs[0, :])
+    ax_h.set_facecolor('#0a2240')
+    ax_h.axis('off')
+    ax_h.set_xlim(0, 1); ax_h.set_ylim(0, 1)
+    ax_h.add_patch(plt.Rectangle(
+        (0, 0.65), 1, 0.35, color='#1a5276',
+        transform=ax_h.transAxes, clip_on=False,
+    ))
+    ax_h.text(0.012, 0.825,
+              f'INDICADOR {fid}  -  COMPARATIVO POR RED DE SALUD',
+              color='#FFB703', fontsize=9, fontweight='bold', va='center',
+              transform=ax_h.transAxes)
+    ax_h.text(0.012, 0.28, t_clean, color='white', fontsize=12,
+              fontweight='bold', va='center', transform=ax_h.transAxes,
+              linespacing=1.3)
+
+    # ── Grafico de barras ─────────────────────────────────────────────────────
+    ax_c = fig.add_subplot(gs[1, :5])
+    ax_c.set_facecolor('#0d1b35')
+
+    x       = np.arange(n)
+    mpl_col = [_to_mpl_color(c) for c in colors]
+    bs      = ax_c.bar(x, df_agg['pct'].values, color=mpl_col, width=0.6,
+                       edgecolor='white', linewidth=0.3)
+
+    pv   = df_agg['pct'].values
+    ymax = max(float(pv.max()) if n > 0 else 0, thr_val, pct_dir, 10) * 1.30
+    ax_c.set_ylim(0, ymax)
+    ypad = ymax * 0.025
+
+    for b, p in zip(bs, pv):
+        ax_c.text(b.get_x() + b.get_width() / 2,
+                  b.get_height() + ypad, f'{p:.1f}%',
+                  ha='center', va='bottom', fontsize=9.5,
+                  color='white', fontweight='bold')
+
+    if thr_val > 0:
+        ax_c.axhline(thr_val, color='#FFB703', ls='--', lw=2,
+                     label=f'META: {thr_val:.0f}%')
+    ax_c.axhline(pct_dir, color='#64B4FF', ls=':', lw=2,
+                 label=f'DIRESA: {pct_dir:.1f}%')
+
+    rl = df_agg['red'].values if 'red' in df_agg.columns else [str(i) for i in x]
+    ax_c.set_xticks(x)
+    ax_c.set_xticklabels(rl, rotation=-18, ha='left', fontsize=9, color='white')
+    ax_c.tick_params(axis='y', colors='white', labelsize=9)
+    ax_c.tick_params(axis='x', colors='white')
+    ax_c.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0f%%'))
+    ax_c.set_ylabel('% Cobertura', color='white', fontsize=10)
+    ax_c.yaxis.grid(True, color='#1a2f5a', lw=0.7)
+    ax_c.set_axisbelow(True)
+    for sp in ax_c.spines.values():
+        sp.set_edgecolor('#4a85c0'); sp.set_linewidth(0.8)
+    ax_c.legend(loc='upper right', fontsize=9, facecolor='#112240',
+                edgecolor='#4a85c0', labelcolor='white', framealpha=0.9)
+
+    # ── Caja resumen ──────────────────────────────────────────────────────────
+    ax_s = fig.add_subplot(gs[1, 5])
+    ax_s.set_facecolor('#0d1b35')
+    ax_s.axis('off')
+    ax_s.set_xlim(0, 1); ax_s.set_ylim(0, 1)
+
+    ax_s.add_patch(FancyBboxPatch(
+        (0.06, 0.04), 0.88, 0.92,
+        boxstyle='round,pad=0.02',
+        facecolor='#112240', edgecolor=mpl_bd, linewidth=2.5,
+        transform=ax_s.transAxes,
+    ))
+    kw = dict(ha='center', transform=ax_s.transAxes)
+    ax_s.text(0.5, 0.95, 'RESUMEN',         color=mpl_bd, fontsize=7.5, fontweight='bold', va='top', **kw)
+    ax_s.text(0.5, 0.87, 'META',            color=mpl_bd, fontsize=8,   va='top', **kw)
+    ax_s.text(0.5, 0.77, f'{thr_val:.0f}%', color=mpl_bd, fontsize=20,  fontweight='bold', va='top', **kw)
+    ax_s.plot([0.12, 0.88], [0.62, 0.62], color=(1,1,1,0.18), lw=0.8, transform=ax_s.transAxes)
+    ax_s.text(0.5, 0.60, 'LOGRO DIRESA',    color=(1,1,1,0.8), fontsize=7, va='top', **kw)
+    ax_s.text(0.5, 0.50, f'{pct_dir:.1f}%', color=mpl_cd, fontsize=18, fontweight='bold', va='top', **kw)
+    ax_s.plot([0.12, 0.88], [0.36, 0.36], color=(1,1,1,0.18), lw=0.8, transform=ax_s.transAxes)
+    ax_s.text(0.5, 0.33, 'PROG',            color=(1,1,1,0.55), fontsize=7.5, va='top', **kw)
+    ax_s.text(0.5, 0.24, f'{den_total:,}',  color='white', fontsize=11, fontweight='bold', va='top', **kw)
+    ax_s.text(0.5, 0.16, 'EJEC',            color=(1,1,1,0.55), fontsize=7.5, va='top', **kw)
+    ax_s.text(0.5, 0.07, f'{num_total:,}',  color='white', fontsize=11, fontweight='bold', va='top', **kw)
+
+    # ── Tabla ─────────────────────────────────────────────────────────────────
+    ax_t = fig.add_subplot(gs[2, :])
+    ax_t.set_facecolor('#0d1b35')
+    ax_t.axis('off')
+
+    cell_d = [[_fmt_c(tbl_df[col].iloc[i], col) for col in cols_t] for i in range(n_t)]
+    row_bg = []
+    row_fg = []
+    for i in range(n_t):
+        if i == n_t - 1:
+            row_bg.append(['#003087'] * len(cols_t))
+            row_fg.append(['white']   * len(cols_t))
+        else:
+            bg = '#EEF2FF' if i % 2 == 0 else '#FFFFFF'
+            row_bg.append([bg]        * len(cols_t))
+            row_fg.append(['#1a1a2e'] * len(cols_t))
+
+    tb = ax_t.table(cellText=cell_d, colLabels=cols_t,
+                    cellLoc='center', loc='center', cellColours=row_bg)
+    tb.auto_set_font_size(False)
+    tb.set_fontsize(8)
+    tb.scale(1, 1.45)
+    for j in range(len(cols_t)):
+        tb[(0, j)].set_facecolor('#003087')
+        tb[(0, j)].set_text_props(color='white', fontweight='bold')
+    for i in range(n_t):
+        for j in range(len(cols_t)):
+            tb[(i+1, j)].set_text_props(color=row_fg[i][j])
+
+    ax_t.set_title('Ranking de Redes - Tabla Resumen',
+                   color='white', fontsize=10, pad=6, loc='left', fontweight='bold')
+
+    # ── Leyenda ───────────────────────────────────────────────────────────────
+    ax_l = fig.add_subplot(gs[3, :])
+    ax_l.set_facecolor('#0d1b35')
+    ax_l.axis('off')
+    ax_l.set_xlim(0, 1); ax_l.set_ylim(0, 1)
+
+    if thr_val > 0:
+        items = [
+            (SEMAFORO['verde'],    f'En meta (>= {thr_val:.0f}%)'),
+            (SEMAFORO['amarillo'], f'Cerca (>= {thr_val*0.8:.0f}%)'),
+            (SEMAFORO['rojo'],     f'Bajo meta (< {thr_val*0.8:.0f}%)'),
+        ]
+        xp = 0.01
+        for hx, lbl in items:
+            ax_l.add_patch(plt.Circle(
+                (xp + 0.009, 0.5), 0.009,
+                color=_to_mpl_color(hx), transform=ax_l.transAxes,
+            ))
+            ax_l.text(xp + 0.024, 0.5, lbl,
+                      color='#8892a4', fontsize=7.5, va='center',
+                      transform=ax_l.transAxes)
+            xp += 0.17
+        ax_l.plot([xp, xp+0.04], [0.5, 0.5],
+                  color='#64B4FF', ls=':', lw=2, transform=ax_l.transAxes)
+        ax_l.text(xp+0.05, 0.5, 'DIRESA total',
+                  color='#8892a4', fontsize=7.5, va='center',
+                  transform=ax_l.transAxes)
+        xp += 0.15
+        ax_l.plot([xp, xp+0.04], [0.5, 0.5],
+                  color='#FFB703', ls='--', lw=2, transform=ax_l.transAxes)
+        ax_l.text(xp+0.05, 0.5, f'META {thr_val:.0f}%',
+                  color='#8892a4', fontsize=7.5, va='center',
+                  transform=ax_l.transAxes)
+
+    plt.tight_layout(pad=0.5)
+    buf = io.BytesIO()
+    fig.savefig(buf, format='jpeg', dpi=150, bbox_inches='tight',
+                facecolor='#0d1b35', edgecolor='none')
+    plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
 
@@ -463,37 +680,49 @@ if sub_grupos:
                     key=f'btn_tbl_vph_{_cat_key}',
                 )
             with eg3:
-                from openpyxl.styles import Font as _Font, PatternFill as _PF, Alignment as _Al, Border as _Bd, Side as _Sd
-                out_g = io.BytesIO()
-                with pd.ExcelWriter(out_g, engine='openpyxl') as wr_g:
-                    tbl_d_g.to_excel(wr_g, index=False, sheet_name='VPH por Red', startrow=2)
-                    ws_g = wr_g.sheets['VPH por Red']
-                    ws_g['A1'] = f'DIRESA HUANCAVELICA — VPH {sg["categoria"]} — {sg["titulo"]}'
-                    ws_g['A1'].font = _Font(bold=True, size=12)
-                    _hf = _PF('solid', start_color='003087', end_color='003087')
-                    for cell in ws_g[3]:
-                        cell.fill = _hf
-                        cell.font = _Font(bold=True, color='FFFFFF', size=11)
-                        cell.alignment = _Al(horizontal='center')
-                    _ts = _Sd(style='thin', color='CCCCCC')
-                    _tb = _Bd(left=_ts, right=_ts, top=_ts, bottom=_ts)
-                    for ri in range(len(tbl_d_g)):
-                        ex_r = ri + 4
-                        _rf = _PF('solid', start_color='EEF2FF' if ri%2==0 else 'FFFFFF',
-                                  end_color='EEF2FF' if ri%2==0 else 'FFFFFF')
-                        for ci, cell in enumerate(ws_g[ex_r]):
-                            cell.font = _Font(bold=True, size=10)
-                            cell.fill = _rf; cell.border = _tb
-                            cell.alignment = _Al(horizontal='center' if ci != 1 else 'left',
-                                                 vertical='center')
                 st.download_button(
-                    label='📊 Descargar Tabla Excel',
-                    data=out_g.getvalue(),
-                    file_name=f'tabla_vph_{_cat_key.lower()}_2026.xlsx',
-                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    label='🖥️ Vista Completa JPG',
+                    data=_full_jpg_bytes(
+                        agg_g, bc_g, sg_thr, pct_g, den_g, num_g,
+                        tbl_d_g, fid, sg['titulo'], cc_d,
+                    ),
+                    file_name=f'vista_completa_vph_{_cat_key.lower()}_2026.jpg',
+                    mime='image/jpeg',
                     use_container_width=True,
-                    key=f'btn_xlsx_{_cat_key}',
+                    key=f'btn_full_vph_{_cat_key}',
                 )
+            # Excel — ancho completo debajo de los 3 botones
+            from openpyxl.styles import Font as _Font, PatternFill as _PF, Alignment as _Al, Border as _Bd, Side as _Sd
+            out_g = io.BytesIO()
+            with pd.ExcelWriter(out_g, engine='openpyxl') as wr_g:
+                tbl_d_g.to_excel(wr_g, index=False, sheet_name='VPH por Red', startrow=2)
+                ws_g = wr_g.sheets['VPH por Red']
+                ws_g['A1'] = f'DIRESA HUANCAVELICA — VPH {sg["categoria"]} — {sg["titulo"]}'
+                ws_g['A1'].font = _Font(bold=True, size=12)
+                _hf = _PF('solid', start_color='003087', end_color='003087')
+                for cell in ws_g[3]:
+                    cell.fill = _hf
+                    cell.font = _Font(bold=True, color='FFFFFF', size=11)
+                    cell.alignment = _Al(horizontal='center')
+                _ts = _Sd(style='thin', color='CCCCCC')
+                _tb = _Bd(left=_ts, right=_ts, top=_ts, bottom=_ts)
+                for ri in range(len(tbl_d_g)):
+                    ex_r = ri + 4
+                    _rf = _PF('solid', start_color='EEF2FF' if ri%2==0 else 'FFFFFF',
+                              end_color='EEF2FF' if ri%2==0 else 'FFFFFF')
+                    for ci, cell in enumerate(ws_g[ex_r]):
+                        cell.font = _Font(bold=True, size=10)
+                        cell.fill = _rf; cell.border = _tb
+                        cell.alignment = _Al(horizontal='center' if ci != 1 else 'left',
+                                             vertical='center')
+            st.download_button(
+                label='📊 Descargar Tabla Excel',
+                data=out_g.getvalue(),
+                file_name=f'tabla_vph_{_cat_key.lower()}_2026.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                use_container_width=True,
+                key=f'btn_xlsx_{_cat_key}',
+            )
     st.stop()
 
 # ── Agrupación por RED ────────────────────────────────────────────────────────
@@ -836,7 +1065,7 @@ st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_ht
 
 exp_col1, exp_col2, exp_col3 = st.columns(3)
 
-_titulo_export = f'Indicador {fid} — {ficha["titulo"][:50]}'
+_titulo_export = f'Indicador {fid} - {ficha["titulo"][:50]}'
 _titulo_tbl    = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · 2026'
 
 with exp_col1:
@@ -913,3 +1142,16 @@ with exp_col3:
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         use_container_width=True,
     )
+
+# Botón vista completa — ancho completo
+st.download_button(
+    label='🖥️ Descargar Vista Completa JPG',
+    data=_full_jpg_bytes(
+        agg, bar_colors, thr, pct_total, den_total, num_total,
+        tbl_display, fid, ficha['titulo'], color_diresa,
+    ),
+    file_name=f'vista_completa_{fid}_2026.jpg',
+    mime='image/jpeg',
+    use_container_width=True,
+    key=f'btn_full_{fid}',
+)
