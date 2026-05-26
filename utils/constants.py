@@ -55,7 +55,9 @@ INDICADORES = {
            ]},
     '25': {'nombre': 'Promedio de espera para la atención en Consulta Externa de un paciente referido',
            'logro_default': None, 'icono': '⏱️',
-           'tipo': 'promedio', 'unidad': 'hrs'},
+           'tipo': 'promedio', 'unidad': 'días',
+           # Meta: NO exceder — menor es mejor
+           'meta_max': 35},
     '32': {'nombre': 'Tasas de uso de los servicios de telemedicina',
            'logro_default': None, 'icono': '📱',
            'tipo': 'tasa', 'unidad': 'x10k',

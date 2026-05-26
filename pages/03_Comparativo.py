@@ -761,11 +761,14 @@ else:
     pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
 thr = (logro or 0) * 100
 
+_meta_max   = INDICADORES.get(fid, {}).get('meta_max', None)   # p.ej. 35 días F25
+_es_prom_max = _es_prom and _meta_max is not None               # promedio donde menor=mejor
+
 # Parámetros de visualización según tipo
 if _es_prom:
     _val_suf = f' {unidad}'
     _y_label = f'Promedio ({unidad})'
-    _val_fmt = '.2f'
+    _val_fmt = '.1f'
 elif _es_tasa:
     _umb_t  = INDICADORES.get(fid, {}).get('umbral', 10)
     _lgr_t  = INDICADORES.get(fid, {}).get('logro_tasa', 100)
@@ -795,6 +798,18 @@ elif _es_tasa:
     agg['logro_red']  = _lgr_t
     agg['umbral_red'] = _umb_t
     agg['meta_txt']   = agg['pct'].apply(lambda p: f'Tasa: {p:.1f} | Meta≥{_lgr_t:.0f} Umbral≥{_umb_t:.0f}')
+elif _es_prom_max:
+    # Menor es mejor: verde si ≤ meta_max, amarillo si ≤ meta_max×1.20, rojo si excede
+    _tol = _meta_max * 1.20
+    agg['color']      = [
+        SEMAFORO['verde'] if p <= _meta_max
+        else (SEMAFORO['amarillo'] if p <= _tol else SEMAFORO['rojo'])
+        for p in agg['pct']
+    ]
+    agg['logro_red']  = _meta_max
+    agg['umbral_red'] = _tol
+    agg['meta_txt']   = agg['pct'].apply(
+        lambda p: f'{p:.1f} {unidad} | Meta ≤ {_meta_max:.0f} {unidad}')
 else:
     agg['color']      = [_color_fijo(p) for p in agg['pct']]
     agg['logro_red']  = thr
@@ -938,6 +953,16 @@ elif _es_tasa:
         annotation_position='top right',
         annotation_font=dict(color='rgba(255,183,3,0.8)', size=11),
     )
+elif _es_prom_max:
+    fig.add_hline(
+        y=_meta_max,
+        line_dash='dash',
+        line_color='#FFB703',
+        line_width=2.5,
+        annotation_text=f'  MÁXIMO: {_meta_max:.0f} {unidad}',
+        annotation_position='top left',
+        annotation_font=dict(color='#FFB703', size=14),
+    )
 
 for idx in range(len(agg)):
     h = float(agg['pct'].iloc[idx])
@@ -1005,6 +1030,18 @@ with col_box:
   </div>
   <div style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin:2px 0;">
     Umbral: {_umb_t:.0f}
+  </div>"""
+        border_color = '#FFB703'
+    elif _es_prom_max:
+        _tol = _meta_max * 1.20
+        color_diresa = (SEMAFORO['verde'] if pct_total <= _meta_max
+                        else (SEMAFORO['amarillo'] if pct_total <= _tol
+                              else SEMAFORO['rojo']))
+        meta_box_html = f"""
+  <div style="color:#FFB703;font-size:0.75rem;margin:4px 0;">
+    <b>MÁXIMO</b><br>
+    <span style="font-size:1.3rem;font-weight:900;">≤ {_meta_max:.0f}</span>
+    <span style="font-size:0.75rem;"> {unidad}</span>
   </div>"""
         border_color = '#FFB703'
     elif logro and tipo == 'pct':
@@ -1082,6 +1119,12 @@ elif _es_tasa:
         lambda p: '🟢 En meta' if p >= _lgr_t
         else ('🟡 Cerca' if p >= _umb_t else '🔴 Bajo meta')
     )
+elif _es_prom_max:
+    _tol = _meta_max * 1.20
+    tbl['estado'] = tbl['pct'].apply(
+        lambda p: '🟢 Cumple' if p <= _meta_max
+        else ('🟡 Cerca' if p <= _tol else '🔴 Excede')
+    )
 elif logro and tipo == 'pct':
     tbl['estado'] = tbl['pct'].apply(
         lambda p: '🟢 En meta' if p >= thr
@@ -1113,6 +1156,11 @@ elif _es_tasa:
     fila_d['Estado'] = emoji_diresa + (
         ' En meta' if color_diresa == SEMAFORO['verde']
         else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Bajo meta')
+    )
+elif _es_prom_max:
+    fila_d['Estado'] = emoji_diresa + (
+        ' Cumple' if color_diresa == SEMAFORO['verde']
+        else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Excede')
     )
 elif logro and tipo == 'pct':
     c_d = _color_fijo(pct_total)
@@ -1159,6 +1207,16 @@ elif _es_tasa:
   <span style="color:#FFB703;">--- META tasa {_lgr_t:.0f}</span>
   <span style="color:rgba(255,183,3,0.6);">-·- UMBRAL tasa {_umb_t:.0f}</span>
 </div>""", unsafe_allow_html=True)
+elif _es_prom_max:
+    _tol = _meta_max * 1.20
+    st.markdown(f"""
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:0.8rem;color:#8892a4;">
+  <span>🟢 Cumple (≤ {_meta_max:.0f} {unidad})</span>
+  <span>🟡 Cerca (≤ {_tol:.0f} {unidad})</span>
+  <span>🔴 Excede (&gt; {_tol:.0f} {unidad})</span>
+  <span style="color:rgba(100,180,255,0.8);">― ― DIRESA total</span>
+  <span style="color:#FFB703;">--- MÁXIMO {_meta_max:.0f} {unidad}</span>
+</div>""", unsafe_allow_html=True)
 elif tiene_meta_escalonada:
     st.markdown("""
 <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:0.8rem;color:#8892a4;">
@@ -1181,7 +1239,7 @@ with exp_col1:
     st.download_button(
         label='🖼️ Descargar Gráfico JPG',
         data=_chart_jpg_bytes(agg, bar_colors,
-                              _lgr_t if _es_tasa else thr,
+                              _lgr_t if _es_tasa else (_meta_max if _es_prom_max else thr),
                               pct_total, _titulo_export,
                               val_suf=_val_suf, y_label=_y_label),
         file_name=f'comparativo_red_{fid}_2026.jpg',
@@ -1212,7 +1270,7 @@ with exp_col3:
         ws['A1'] = f'DIRESA HUANCAVELICA — Comparativo por Red — Indicador {fid}'
         ws['A2'] = ficha['titulo']
         _lbl3 = 'Tasa' if _es_tasa else ('Promedio' if _es_prom else 'Cobertura')
-        _sfx3 = '' if _es_no_pct else '%'
+        _sfx3 = (f' {unidad}' if _es_prom else ('') if _es_tasa else '%')
         ws['A3'] = f'Año: 2026    PROG: {den_total:,}    EJEC: {num_total:,}    {_lbl3} DIRESA: {pct_total:.1f}{_sfx3}'
         ws.column_dimensions['A'].width = 6
         ws.column_dimensions['B'].width = 30
@@ -1262,7 +1320,7 @@ st.download_button(
     label='🖥️ Descargar Vista Completa JPG',
     data=_full_jpg_bytes(
         agg, bar_colors,
-        _lgr_t if _es_tasa else thr,
+        _lgr_t if _es_tasa else (_meta_max if _es_prom_max else thr),
         pct_total, den_total, num_total,
         tbl_display, fid, ficha['titulo'], color_diresa,
         val_suf=_val_suf, y_label=_y_label,
