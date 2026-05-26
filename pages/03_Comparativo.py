@@ -225,8 +225,11 @@ if sub_grupos:
   </div>
 </div>""", unsafe_allow_html=True)
             with col_c:
+                _fn_g = f'vph_{sg["categoria"].replace(" ","_").lower()}_2026'
                 st.plotly_chart(fg, use_container_width=True,
-                                key=f'chart_vph_{sg["categoria"].replace(" ", "_")}')
+                                key=f'chart_vph_{sg["categoria"].replace(" ", "_")}',
+                                config=_img_config(_fn_g))
+                st.caption('📷 Usa el ícono de cámara (barra superior del gráfico) para descargar JPG')
 
             st.markdown(f'<div class="seccion-titulo">📋 Ranking — {sg["titulo"]}</div>',
                         unsafe_allow_html=True)
@@ -260,35 +263,23 @@ if sub_grupos:
 
             # Exportar
             st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
-            eg1, eg2, eg3 = st.columns(3)
+            _cat_key = sg['categoria'].replace(' ', '_')
+            _fn_tbl_g = f'tabla_vph_{_cat_key.lower()}_2026'
+            _h_tbl_g  = max(250, len(tbl_d_g) * 30 + 90)
+            _fig_tbl_g = _make_plotly_table_fig(
+                tbl_d_g,
+                f'DIRESA Huancavelica · VPH {sg["categoria"]} · por Red · 2026'
+            )
+            eg1, eg2 = st.columns([3, 1])
             with eg1:
-                try:
-                    _jpg_g = fg.to_image(format='jpeg', width=1400, height=700, scale=2)
-                    st.download_button(
-                        label='🖼️ Gráfico (JPG)',
-                        data=_jpg_g,
-                        file_name=f'vph_{sg["categoria"].replace(" ","_").lower()}_2026.jpg',
-                        mime='image/jpeg',
-                        use_container_width=True,
-                        key=f'btn_jpg_chart_{sg["categoria"]}',
-                    )
-                except Exception:
-                    pass
-            with eg2:
-                _tbl_jpg_g = _make_table_jpg(
-                    tbl_d_g,
-                    f'DIRESA Huancavelica — VPH {sg["categoria"]} — por Red'
+                st.markdown('**📋 Tabla — JPG:** usa el ícono 📷 (barra superior derecha) para descargar')
+                st.plotly_chart(
+                    _fig_tbl_g,
+                    use_container_width=True,
+                    key=f'tbl_dl_{_cat_key}',
+                    config=_img_config(_fn_tbl_g, w=1000, h=_h_tbl_g),
                 )
-                if _tbl_jpg_g:
-                    st.download_button(
-                        label='📋 Tabla (JPG)',
-                        data=_tbl_jpg_g,
-                        file_name=f'tabla_vph_{sg["categoria"].replace(" ","_").lower()}_2026.jpg',
-                        mime='image/jpeg',
-                        use_container_width=True,
-                        key=f'btn_jpg_tbl_{sg["categoria"]}',
-                    )
-            with eg3:
+            with eg2:
                 from openpyxl.styles import Font as _Font, PatternFill as _PF, Alignment as _Al, Border as _Bd, Side as _Sd
                 out_g = io.BytesIO()
                 with pd.ExcelWriter(out_g, engine='openpyxl') as wr_g:
@@ -313,13 +304,14 @@ if sub_grupos:
                             cell.border = _tb
                             cell.alignment = _Al(horizontal='center' if ci != 1 else 'left',
                                                  vertical='center')
+                st.markdown('**📊 Excel:**')
                 st.download_button(
-                    label='📊 Tabla (Excel)',
+                    label='📥 Descargar Excel',
                     data=out_g.getvalue(),
-                    file_name=f'tabla_vph_{sg["categoria"].replace(" ","_").lower()}_2026.xlsx',
+                    file_name=f'tabla_vph_{_cat_key.lower()}_2026.xlsx',
                     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     use_container_width=True,
-                    key=f'btn_xlsx_{sg["categoria"]}',
+                    key=f'btn_xlsx_{_cat_key}',
                 )
     st.stop()
 
@@ -366,64 +358,72 @@ def _emoji_from_color(c: str) -> str:
     return '🔵'
 
 
-def _make_table_jpg(df_tbl: pd.DataFrame, titulo: str) -> bytes | None:
-    """Genera una imagen JPG de la tabla usando Plotly Table + kaleido."""
-    try:
-        cols = df_tbl.columns.tolist()
+def _img_config(filename: str, w: int = 1400, h: int = 700) -> dict:
+    """Config para st.plotly_chart: descarga JPG client-side via modebar (sin kaleido)."""
+    return {
+        'toImageButtonOptions': {
+            'format': 'jpeg',
+            'filename': filename,
+            'width': w,
+            'height': h,
+            'scale': 2,
+        },
+        'displayModeBar': True,
+        'displaylogo': False,
+        'modeBarButtonsToRemove': [
+            'zoom2d', 'pan2d', 'select2d', 'lasso2d',
+            'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
+        ],
+    }
 
-        def _fmt(val, col):
-            if col == 'Cobertura %':
-                try:
-                    return f'{float(val):.1f}%'
-                except Exception:
-                    return str(val)
-            if col in ('PROG', 'EJEC', 'Pendiente'):
-                try:
-                    return f'{int(float(val)):,}'
-                except Exception:
-                    return str(val)
-            return str(val) if str(val) not in ('nan', 'None') else ''
 
-        cell_vals = [[_fmt(df_tbl[c].iloc[i], c) for i in range(len(df_tbl))] for c in cols]
+def _make_plotly_table_fig(df_tbl: pd.DataFrame, titulo: str) -> go.Figure:
+    """Figura Plotly con go.Table para mostrar Y descargar como JPG vía modebar."""
+    cols = df_tbl.columns.tolist()
 
-        n = len(df_tbl)
-        row_fills = ['#EEF2FF' if i % 2 == 0 else '#FFFFFF' for i in range(n)]
-        # Última fila (DIRESA total) siempre azul oscuro
-        row_fills[-1] = '#003087'
-        font_colors = ['#FFFFFF' if row_fills[i] == '#003087' else '#1a1a2e' for i in range(n)]
+    def _fmt(val, col):
+        if col == 'Cobertura %':
+            try:
+                return f'{float(val):.1f}%'
+            except Exception:
+                return str(val)
+        if col in ('PROG', 'EJEC', 'Pendiente'):
+            try:
+                return f'{int(float(val)):,}'
+            except Exception:
+                return str(val)
+        return '' if str(val) in ('nan', 'None') else str(val)
 
-        fig_t = go.Figure(data=[go.Table(
-            columnwidth=[40, 160] + [80] * (len(cols) - 2),
-            header=dict(
-                values=[f'<b>{c}</b>' for c in cols],
-                fill_color='#003087',
-                font=dict(color='white', size=11, family='Arial Black'),
-                align='center',
-                height=32,
-            ),
-            cells=dict(
-                values=cell_vals,
-                fill_color=[row_fills] * len(cols),
-                font=dict(color=[font_colors] * len(cols), size=11, family='Arial'),
-                align=['center' if c != 'Red de Salud' else 'left' for c in cols],
-                height=28,
-            ),
-        )])
-        fig_t.add_annotation(
-            text=f'<b>{titulo}</b>',
-            xref='paper', yref='paper',
-            x=0.5, y=1.04, showarrow=False,
-            font=dict(size=13, color='#003087', family='Arial Black'),
-            xanchor='center',
-        )
-        fig_t.update_layout(
-            paper_bgcolor='white',
-            margin=dict(l=20, r=20, t=40, b=10),
-            height=max(200, n * 30 + 80),
-        )
-        return fig_t.to_image(format='jpeg', scale=2)
-    except Exception:
-        return None
+    n = len(df_tbl)
+    row_colors  = ['#EEF2FF' if i % 2 == 0 else '#FFFFFF' for i in range(n)]
+    row_colors[-1] = '#003087'
+    font_colors = ['#FFFFFF' if rc == '#003087' else '#1a1a2e' for rc in row_colors]
+
+    fig_t = go.Figure(data=[go.Table(
+        columnwidth=[40, 180] + [80] * max(0, len(cols) - 2),
+        header=dict(
+            values=[f'<b>{c}</b>' for c in cols],
+            fill_color='#003087',
+            font=dict(color='white', size=11, family='Arial Black'),
+            align='center',
+            height=32,
+        ),
+        cells=dict(
+            values=[[_fmt(df_tbl[c].iloc[i], c) for i in range(n)] for c in cols],
+            fill_color=[row_colors] * len(cols),
+            font=dict(color=[font_colors] * len(cols), size=11, family='Arial'),
+            align=['left' if c == 'Red de Salud' else 'center' for c in cols],
+            height=28,
+        ),
+    )])
+    fig_t.update_layout(
+        title=dict(text=f'<b>{titulo}</b>',
+                   font=dict(size=11, color='white'), x=0.5),
+        paper_bgcolor='#0d1b35',
+        margin=dict(l=10, r=10, t=35, b=5),
+        height=max(220, n * 30 + 80),
+    )
+    return fig_t
 
 
 def _hex_to_rgb(hx: str):
@@ -676,7 +676,9 @@ with col_box:
 </div>""", unsafe_allow_html=True)
 
 with col_chart:
-    st.plotly_chart(fig, use_container_width=True, key='chart_comparativo')
+    st.plotly_chart(fig, use_container_width=True, key='chart_comparativo',
+                    config=_img_config(f'comparativo_red_{fid}_2026'))
+    st.caption('📷 Usa el ícono de cámara en la esquina superior derecha del gráfico para descargar JPG')
 
 # ── Nota meta escalonada ──────────────────────────────────────────────────────
 if tiene_meta_escalonada:
@@ -776,45 +778,22 @@ elif tiene_meta_escalonada:
 # ── Exportar ──────────────────────────────────────────────────────────────────
 st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
 
-exp_col1, exp_col2, exp_col3 = st.columns(3)
+_tit_tbl = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · 2026'
+_fig_tbl_dl = _make_plotly_table_fig(tbl_display, _tit_tbl)
+_h_tbl = max(250, len(tbl_display) * 30 + 90)
+
+exp_col1, exp_col2 = st.columns([3, 1])
 
 with exp_col1:
-    try:
-        img_bytes = fig.to_image(format='jpeg', width=1400, height=700, scale=2)
-        st.download_button(
-            label='🖼️ Gráfico (JPG)',
-            data=img_bytes,
-            file_name=f'comparativo_red_{fid}_2026.jpg',
-            mime='image/jpeg',
-            use_container_width=True,
-        )
-    except Exception:
-        html_bytes = fig.to_html(full_html=True, include_plotlyjs='cdn').encode('utf-8')
-        st.download_button(
-            label='🖼️ Gráfico (HTML)',
-            data=html_bytes,
-            file_name=f'comparativo_red_{fid}_2026.html',
-            mime='text/html',
-            use_container_width=True,
-        )
+    st.markdown('**📋 Tabla — JPG:** usa el ícono 📷 (barra superior derecha) para descargar')
+    st.plotly_chart(
+        _fig_tbl_dl,
+        use_container_width=True,
+        key='tbl_dl_chart',
+        config=_img_config(f'tabla_red_{fid}_2026', w=1100, h=_h_tbl),
+    )
 
 with exp_col2:
-    _tbl_jpg = _make_table_jpg(
-        tbl_display,
-        f'DIRESA Huancavelica — Indicador {fid} — Comparativo por Red'
-    )
-    if _tbl_jpg:
-        st.download_button(
-            label='📋 Tabla (JPG)',
-            data=_tbl_jpg,
-            file_name=f'tabla_red_{fid}_2026.jpg',
-            mime='image/jpeg',
-            use_container_width=True,
-        )
-    else:
-        st.info('JPG de tabla no disponible (instala kaleido)')
-
-with exp_col3:
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -835,21 +814,19 @@ with exp_col3:
         ws['A1'].font = Font(bold=True, size=13)
         ws['A2'].font = Font(italic=True, size=10)
         ws['A3'].font = Font(size=10, color='444444')
-        # Header row (row 4)
         hfill = PatternFill('solid', start_color='003087', end_color='003087')
         hfont = Font(bold=True, color='FFFFFF', size=11)
         for cell in ws[4]:
             cell.fill = hfill
             cell.font = hfont
             cell.alignment = Alignment(horizontal='center', vertical='center')
-        # Data rows — bold text, alternating fill, centered numbers
         n_rows = len(tbl_excel)
         thin_side = Side(style='thin', color='CCCCCC')
         thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         fill_even = PatternFill('solid', start_color='EEF2FF', end_color='EEF2FF')
         fill_odd  = PatternFill('solid', start_color='FFFFFF', end_color='FFFFFF')
         for row_i in range(n_rows):
-            excel_row = row_i + 5   # data starts at row 5 (1-indexed)
+            excel_row = row_i + 5
             row_fill = fill_even if row_i % 2 == 0 else fill_odd
             for col_i, cell in enumerate(ws[excel_row]):
                 cell.font = Font(bold=True, size=10)
@@ -859,7 +836,6 @@ with exp_col3:
                     horizontal='center' if col_i != 1 else 'left',
                     vertical='center'
                 )
-        # DIRESA total summary row
         total_row = n_rows + 5
         total_data = ['', 'DIRESA HUANCAVELICA', den_total, num_total, f'{pct_total:.1f}%', '']
         for col_i, val in enumerate(total_data, start=1):
@@ -868,8 +844,9 @@ with exp_col3:
             c.fill = PatternFill('solid', start_color='003087', end_color='003087')
             c.alignment = Alignment(horizontal='center' if col_i != 2 else 'left', vertical='center')
             c.border = thin_border
+    st.markdown('**📊 Tabla Excel:**')
     st.download_button(
-        label='📊 Descargar tabla (Excel)',
+        label='📥 Descargar Excel',
         data=output.getvalue(),
         file_name=f'comparativo_red_{fid}_2026.xlsx',
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
