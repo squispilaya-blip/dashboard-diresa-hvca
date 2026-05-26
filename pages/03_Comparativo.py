@@ -733,12 +733,25 @@ agg = (df_con_red
        .groupby('red')
        .agg(den=('den', 'sum'), num=('num', 'sum'))
        .reset_index())
-agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'] * 100, 0).round(1)
+# Para tipo='promedio' el valor es num/den (no ×100); para tipo='pct' es num/den×100
+_es_prom = (tipo != 'pct')
+if _es_prom:
+    agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'], 0).round(2)
+else:
+    agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'] * 100, 0).round(1)
 
 den_total = int(df_base['den'].sum())
 num_total = int(df_base['num'].sum())
-pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
-thr       = (logro or 0) * 100
+if _es_prom:
+    pct_total = round(num_total / den_total, 2) if den_total > 0 else 0
+else:
+    pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
+thr = (logro or 0) * 100
+
+# Sufijo y etiqueta del eje Y según tipo de indicador
+_val_suf = f' {unidad}' if _es_prom else '%'
+_y_label = f'Promedio ({unidad})' if _es_prom else '% Cobertura'
+_val_fmt = '.2f' if _es_prom else '.1f'
 
 # ── Calcular color por barra — ANTES del sort ─────────────────────────────────
 if tiene_meta_escalonada:
@@ -769,9 +782,10 @@ y_max_raw = max(
     pct_total,
     agg['logro_red'].max() if not agg.empty else 0,
 )
-DY   = max(y_max_raw * 0.042, 2.0)
+DY   = max(y_max_raw * 0.042, 0.05 if _es_prom else 2.0)
 y_max = (y_max_raw + DY) * 1.30
-y_max = max(y_max, 25)
+if not _es_prom:
+    y_max = max(y_max, 25)
 
 # ── Construcción del gráfico 3D ───────────────────────────────────────────────
 fig = go.Figure()
@@ -795,8 +809,8 @@ fig.add_trace(go.Bar(
     ]),
     hovertemplate=(
         '<b>%{x}</b><br>'
-        'Cobertura: <b>%{y:.1f}%</b><br>'
-        '%{customdata[4]}<br>'
+        + (f'Promedio: <b>%{{y:.2f}} {unidad}</b><br>' if _es_prom else 'Cobertura: <b>%{y:.1f}%</b><br>')
+        + '%{customdata[4]}<br>'
         'PROG: %{customdata[0]:,}<br>'
         'EJEC: %{customdata[1]:,}<br>'
         'Ranking: #%{customdata[2]}'
@@ -855,7 +869,7 @@ fig.add_hline(
     line_dash='dot',
     line_color='rgba(100,180,255,0.8)',
     line_width=2,
-    annotation_text=f'  DIRESA: {pct_total:.1f}%',
+    annotation_text=f'  DIRESA: {pct_total:{_val_fmt[1:]}}{_val_suf}',
     annotation_position='top right',
     annotation_font=dict(color='rgba(100,180,255,1)', size=12),
 )
@@ -878,7 +892,7 @@ for idx in range(len(agg)):
         x=red_name,
         y=h + DY + y_max * 0.028,
         xref='x', yref='y',
-        text=f'<b>{h:.1f}%</b>',
+        text=f'<b>{h:{_val_fmt}}{_val_suf}</b>',
         showarrow=False,
         font=dict(size=15, color='white', family='Arial Black'),
         bgcolor='rgba(0,0,0,0)',
@@ -898,10 +912,10 @@ fig.update_layout(
         tickangle=-15,
     ),
     yaxis=dict(
-        title='% Cobertura',
+        title=_y_label,
         range=[0, y_max],
         gridcolor='rgba(255,255,255,0.07)',
-        ticksuffix='%',
+        ticksuffix='' if _es_prom else '%',
         tickfont=dict(size=11),
     ),
     bargap=0.30,
@@ -952,9 +966,9 @@ with col_box:
   {meta_box_html}
   <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
   <div style="color:rgba(255,255,255,0.8);font-size:0.78rem;margin:4px 0;">
-    <b>LOGRO DIRESA</b><br>
+    <b>{'PROMEDIO' if _es_prom else 'LOGRO'} DIRESA</b><br>
     <span style="font-size:1.4rem;font-weight:900;color:{logro_color};">
-      {pct_total:.1f}%
+      {pct_total:{_val_fmt}}{_val_suf}
     </span> {emoji_diresa}
   </div>
   <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
@@ -1002,15 +1016,16 @@ elif logro and tipo == 'pct':
         else ('🟡 Cerca' if p >= thr * 0.80 else '🔴 Bajo meta')
     )
 
+_col_val = f'Promedio ({unidad})' if _es_prom else 'Cobertura %'
 tbl = tbl.rename(columns={
     'rank': '#', 'red': 'Red de Salud',
-    'pct': 'Cobertura %', 'den': 'PROG', 'num': 'EJEC',
+    'pct': _col_val, 'den': 'PROG', 'num': 'EJEC',
     'pendiente': 'Pendiente', 'meta_%': 'Meta', 'estado': 'Estado',
 })
 
 fila_d: dict = {
     '#': '—', 'Red de Salud': '📊 DIRESA (Total)',
-    'Cobertura %': pct_total,
+    _col_val: pct_total,
     'PROG': den_total, 'EJEC': num_total,
     'Pendiente': max(0, den_total - num_total),
 }
@@ -1029,10 +1044,11 @@ elif logro and tipo == 'pct':
 
 tbl_display = pd.concat([tbl, pd.DataFrame([fila_d])], ignore_index=True)
 
+_val_col_fmt = '%.2f hrs' if _es_prom else '%.1f%%'
 col_cfg = {
     '#':            st.column_config.TextColumn('#', width='small'),
     'Red de Salud': st.column_config.TextColumn('Red de Salud', width='large'),
-    'Cobertura %':  st.column_config.NumberColumn('Cobertura %', format='%.1f%%', width='medium'),
+    _col_val:       st.column_config.NumberColumn(_col_val, format=_val_col_fmt, width='medium'),
     'PROG':         st.column_config.NumberColumn('PROG', format='%d', width='small'),
     'EJEC':         st.column_config.NumberColumn('EJEC', format='%d', width='small'),
     'Pendiente':    st.column_config.NumberColumn('Pendiente', format='%d', width='small'),
