@@ -3,9 +3,9 @@ Página 03 — Comparativo por Red de Salud
 Ranking de cobertura por Red para cada indicador con línea de meta.
 """
 import io
-import json
 import streamlit as st
 import streamlit.components.v1 as components
+import plotly.io as pio
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
@@ -359,7 +359,7 @@ def _dl_button(fig: go.Figure, filename: str, label: str,
     Renderiza la figura en un div oculto y dispara la descarga al hacer clic.
     """
     safe = (key or filename).replace('-', '_').replace('.', '_').replace(' ', '_')
-    fig_json = json.dumps(fig.to_plotly_json())
+    fig_json = pio.to_json(fig)
     html = f"""<!DOCTYPE html><html><body style="margin:0;padding:2px">
 <div id="h{safe}" style="position:fixed;left:-9999px;width:{w}px;height:{h}px"></div>
 <button onclick="(function(){{
