@@ -8,6 +8,7 @@ streamlit-authenticator>=0.3.0
 bcrypt>=4.0.0
 PyYAML>=6.0
 plotly>=5.20.0
+kaleido>=0.2.1
 fpdf2>=2.7.0
 Pillow>=10.0.0
 requests>=2.31.0

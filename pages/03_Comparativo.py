@@ -63,11 +63,16 @@ def get_meta_escalonada(den: int):
 st.markdown(f"""
 <div class="header-diresa">
   <div style="flex:1">
-    <h1>{ficha['icono']} Comparativo por Red — Indicador {fid}</h1>
-    <p>{ficha['titulo']}</p>
-    <p style="font-size:0.8rem;opacity:0.7;">
-      DIRESA Huancavelica &nbsp;·&nbsp; 2026 &nbsp;·&nbsp;
-      Ranking de cobertura por Red de Salud
+    <div style="font-size:0.85rem;color:#FFB703;font-weight:700;letter-spacing:0.08em;
+                text-transform:uppercase;margin-bottom:4px;">
+      Indicador {fid} &nbsp;·&nbsp; Comparativo por Red de Salud
+    </div>
+    <h1 style="font-size:1.55rem;font-weight:900;line-height:1.25;margin:0 0 10px 0;
+               color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.5);">
+      {ficha['icono']}&nbsp; {ficha['titulo']}
+    </h1>
+    <p style="font-size:0.82rem;opacity:0.65;margin:0;">
+      DIRESA Huancavelica &nbsp;·&nbsp; 2026 &nbsp;·&nbsp; Solo MINSA
     </p>
   </div>
 </div>""", unsafe_allow_html=True)
@@ -485,16 +490,27 @@ st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_ht
 exp_col1, exp_col2 = st.columns(2)
 
 with exp_col1:
-    html_bytes = fig.to_html(full_html=True, include_plotlyjs='cdn').encode('utf-8')
-    st.download_button(
-        label='🖼️ Descargar gráfico (HTML interactivo)',
-        data=html_bytes,
-        file_name=f'comparativo_red_{fid}_2026.html',
-        mime='text/html',
-        use_container_width=True,
-    )
+    try:
+        img_bytes = fig.to_image(format='png', width=1400, height=700, scale=2)
+        st.download_button(
+            label='🖼️ Descargar gráfico (PNG)',
+            data=img_bytes,
+            file_name=f'comparativo_red_{fid}_2026.png',
+            mime='image/png',
+            use_container_width=True,
+        )
+    except Exception:
+        html_bytes = fig.to_html(full_html=True, include_plotlyjs='cdn').encode('utf-8')
+        st.download_button(
+            label='🖼️ Descargar gráfico (HTML)',
+            data=html_bytes,
+            file_name=f'comparativo_red_{fid}_2026.html',
+            mime='text/html',
+            use_container_width=True,
+        )
 
 with exp_col2:
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         tbl_excel = tbl_display.copy()
@@ -511,16 +527,42 @@ with exp_col2:
         ws.column_dimensions['D'].width = 10
         ws.column_dimensions['E'].width = 10
         ws.column_dimensions['F'].width = 12
-        from openpyxl.styles import Font, PatternFill, Alignment
         ws['A1'].font = Font(bold=True, size=13)
         ws['A2'].font = Font(italic=True, size=10)
         ws['A3'].font = Font(size=10, color='444444')
+        # Header row (row 4)
         hfill = PatternFill('solid', start_color='003087', end_color='003087')
-        hfont = Font(bold=True, color='FFFFFF', size=10)
+        hfont = Font(bold=True, color='FFFFFF', size=11)
         for cell in ws[4]:
             cell.fill = hfill
             cell.font = hfont
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        # Data rows — bold text, alternating fill, centered numbers
+        n_rows = len(tbl_excel)
+        thin_side = Side(style='thin', color='CCCCCC')
+        thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+        fill_even = PatternFill('solid', start_color='EEF2FF', end_color='EEF2FF')
+        fill_odd  = PatternFill('solid', start_color='FFFFFF', end_color='FFFFFF')
+        for row_i in range(n_rows):
+            excel_row = row_i + 5   # data starts at row 5 (1-indexed)
+            row_fill = fill_even if row_i % 2 == 0 else fill_odd
+            for col_i, cell in enumerate(ws[excel_row]):
+                cell.font = Font(bold=True, size=10)
+                cell.fill = row_fill
+                cell.border = thin_border
+                cell.alignment = Alignment(
+                    horizontal='center' if col_i != 1 else 'left',
+                    vertical='center'
+                )
+        # DIRESA total summary row
+        total_row = n_rows + 5
+        total_data = ['', 'DIRESA HUANCAVELICA', den_total, num_total, f'{pct_total:.1f}%', '']
+        for col_i, val in enumerate(total_data, start=1):
+            c = ws.cell(row=total_row, column=col_i, value=val)
+            c.font = Font(bold=True, size=11, color='FFFFFF')
+            c.fill = PatternFill('solid', start_color='003087', end_color='003087')
+            c.alignment = Alignment(horizontal='center' if col_i != 2 else 'left', vertical='center')
+            c.border = thin_border
     st.download_button(
         label='📊 Descargar tabla (Excel)',
         data=output.getvalue(),
