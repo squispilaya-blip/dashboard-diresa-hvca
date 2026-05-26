@@ -81,6 +81,129 @@ def get_semaforo_color(pct: float, logro: float | None) -> str:
     return 'rojo'
 
 
+def _load_ficha_16_vph(xl, meta: dict) -> dict | None:
+    """Loader especial para Ficha 16 (VPH) — lee la hoja COMPARATIVO del monitoreo diario.
+
+    Estructura del archivo: hoja '26 MAY (COMPARATIVO)' (o la más reciente con 'COMPARATIVO').
+    Sección VPH: col0=RIS, col4=META 9años, col5=DU 9años, col7=META 10-18años, col8=DU 10-18años.
+    """
+    comp_sheet = None
+    for sh in reversed(xl.sheet_names):
+        if 'COMPARATIVO' in sh.upper():
+            comp_sheet = sh
+            break
+    if comp_sheet is None:
+        return None
+
+    df_raw = xl.parse(comp_sheet, header=None)
+
+    # Detectar dinámicamente la fila de cabecera de la sección VPH buscando 'RIS' en col0
+    # y '9' o 'VPH' en la misma fila
+    header_row = None
+    for i in range(len(df_raw)):
+        val0 = str(df_raw.iloc[i, 0]).strip().upper()
+        row_str = ' '.join(str(v) for v in df_raw.iloc[i].tolist())
+        if val0 == 'RIS' and 'VPH' in row_str:
+            header_row = i
+            break
+    if header_row is None:
+        return None
+
+    # Columnas VPH: determinadas por encabezados en header_row+1 / header_row+2
+    # Buscar las columnas META de '9 AÑOS' y '10 A 18 AÑOS' en las filas siguientes
+    col_meta9, col_meta18 = None, None
+    for check_row in range(header_row + 1, min(header_row + 4, len(df_raw))):
+        row_vals = [str(v).strip() for v in df_raw.iloc[check_row].tolist()]
+        for j, v in enumerate(row_vals):
+            if '9' in v and 'O' in v.upper() and col_meta9 is None:
+                # Encontrar el META que precede a la columna '9 AÑOS'
+                # Buscar 'META' antes de este índice
+                for k in range(j - 1, max(j - 3, -1), -1):
+                    if 'META' in str(df_raw.iloc[check_row, k]).upper():
+                        col_meta9 = k
+                        break
+                if col_meta9 is None:
+                    col_meta9 = j - 1  # fallback: columna anterior es META
+            if '10' in v and '18' in v and col_meta18 is None:
+                for k in range(j - 1, max(j - 3, -1), -1):
+                    if 'META' in str(df_raw.iloc[check_row, k]).upper():
+                        col_meta18 = k
+                        break
+                if col_meta18 is None:
+                    col_meta18 = j - 1
+        if col_meta9 is not None and col_meta18 is not None:
+            break
+
+    # Valores por defecto confirmados empíricamente si la detección falla
+    if col_meta9 is None:
+        col_meta9 = 4
+    if col_meta18 is None:
+        col_meta18 = 7
+
+    col_du9  = col_meta9  + 1
+    col_du18 = col_meta18 + 1
+
+    _SKIP = {'ESSALUD', 'ESSALUD ', 'DIRESA', 'HUANCAVELICA'}
+    rows = []
+    for i in range(header_row + 3, len(df_raw)):
+        r = df_raw.iloc[i].tolist()
+        if not isinstance(r[0], str):
+            continue
+        red = str(r[0]).strip().upper()
+        if not red or red in _SKIP:
+            continue
+        try:
+            m9  = int(r[col_meta9])
+            du9 = int(r[col_du9])
+            m18 = int(r[col_meta18])
+            du18= int(r[col_du18])
+        except (ValueError, TypeError, IndexError):
+            continue
+        # Normalizar nombres de Red al formato TITLE CASE
+        red_fmt = red.title()
+        rows.append({'red': red_fmt, 'den': m9,  'num': du9,  'categoria': '9 AÑOS',    'año': 2026, 'mes': 5})
+        rows.append({'red': red_fmt, 'den': m18, 'num': du18, 'categoria': '10-18 AÑOS','año': 2026, 'mes': 5})
+
+    if not rows:
+        return None
+
+    df_norm = pd.DataFrame(rows)
+    for col in ['microred', 'eess', 'provincia', 'nombres', 'num_doc',
+                'genero', 'seguro', 'fecha_nac', 'fecha_dx', 'edad']:
+        df_norm[col] = ''
+    df_norm['pct'] = np.where(df_norm['den'] > 0, df_norm['num'] / df_norm['den'], 0.0)
+    df_norm['ficha_id'] = '16'
+
+    logro = meta.get('logro_default', 0.90)
+
+    return {
+        'id':         '16',
+        'titulo':     meta.get('nombre', 'Vacunación VPH'),
+        'logro':      logro,
+        'logro_str':  f'{logro*100:.0f}%',
+        'icono':      meta.get('icono', '💉'),
+        'tipo':       'pct',
+        'unidad':     '%',
+        'umbral':     None,
+        'logro_tasa': None,
+        'df':         df_norm,
+        'has_nombres':   False,
+        'has_numdoc':    False,
+        'has_red':       True,
+        'has_eess':      False,
+        'has_fecha_nac': False,
+        'has_fecha_dx':  False,
+        'has_genero':    False,
+        'has_seguro':    False,
+        'has_categoria': True,
+        'has_edad':      False,
+        'sub_grupos': [
+            {'titulo': 'VPH — Niñas/os 9 años',         'categoria': '9 AÑOS',    'logro': logro},
+            {'titulo': 'VPH — Adolescentes 10-18 años',  'categoria': '10-18 AÑOS','logro': logro},
+        ],
+    }
+
+
 def load_ficha(file, filename: str) -> dict | None:
     ficha_id = detect_ficha_id(filename)
     if ficha_id is None:
@@ -88,6 +211,7 @@ def load_ficha(file, filename: str) -> dict | None:
     meta = INDICADORES.get(ficha_id, {})
 
     # Abrir el archivo UNA SOLA VEZ con ExcelFile + motor calamine (Rust, ~3.5x más rápido)
+    # (también usado por el loader especial de Ficha 16)
     # Antes: pd.read_excel() hasta 11 veces por archivo; ahora: 1 apertura, N parses directos
     try:
         file.seek(0)
@@ -101,6 +225,10 @@ def load_ficha(file, filename: str) -> dict | None:
             sheets_set = set(xl.sheet_names)
         except Exception:
             return None
+
+    # Ficha 16 tiene formato especial (monitoreo diario vacunación)
+    if ficha_id == '16':
+        return _load_ficha_16_vph(xl, meta)
 
     # Leer Hoja1 para extraer logro y título
     try:

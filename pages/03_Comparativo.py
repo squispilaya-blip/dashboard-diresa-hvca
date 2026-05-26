@@ -94,6 +94,171 @@ if 'red' not in df_base.columns or not df_base['red'].str.len().gt(0).any():
         st.warning('⚠️ Este indicador no tiene datos de Red de Salud.')
     st.stop()
 
+# ── Ficha 16: VPH con dos grupos de edad — mostrar dos gráficas ──────────────
+sub_grupos = ficha.get('sub_grupos')
+if sub_grupos:
+    tab_labels = [sg['titulo'] for sg in sub_grupos]
+    tabs_vph = st.tabs(tab_labels)
+    for tab_vph, sg in zip(tabs_vph, sub_grupos):
+        with tab_vph:
+            df_g = df_base[df_base['categoria'] == sg['categoria']].copy()
+            sg_thr = sg['logro'] * 100
+
+            agg_g = (df_g[df_g['red'].str.len() > 0]
+                     .groupby('red')
+                     .agg(den=('den', 'sum'), num=('num', 'sum'))
+                     .reset_index())
+            agg_g['pct'] = np.where(agg_g['den'] > 0,
+                                    agg_g['num'] / agg_g['den'] * 100, 0).round(1)
+
+            den_g = int(df_g['den'].sum())
+            num_g = int(df_g['num'].sum())
+            pct_g = round(num_g / den_g * 100, 1) if den_g > 0 else 0
+
+            # Colores ANTES del sort
+            agg_g['color'] = agg_g['pct'].apply(
+                lambda p: SEMAFORO['verde'] if p >= sg_thr
+                else (SEMAFORO['amarillo'] if p >= sg_thr * 0.80 else SEMAFORO['rojo'])
+            )
+            agg_g = agg_g.sort_values('pct', ascending=False).reset_index(drop=True)
+            agg_g['rank'] = range(1, len(agg_g) + 1)
+            bc_g = agg_g['color'].tolist()
+
+            BH = 0.275
+            DX_G = 0.18
+            ymx_raw = max(agg_g['pct'].max() if not agg_g.empty else 0, sg_thr, pct_g)
+            DY_G = max(ymx_raw * 0.042, 2.0)
+            ymx_g = max((ymx_raw + DY_G) * 1.30, 25)
+
+            fg = go.Figure()
+            fg.add_trace(go.Bar(
+                name='Cobertura 2026',
+                x=agg_g['red'], y=agg_g['pct'],
+                marker=dict(color=bc_g, line=dict(color='rgba(255,255,255,0.25)', width=1.2)),
+                text=[''] * len(agg_g), width=0.55,
+                customdata=np.column_stack([agg_g['den'].values,
+                                            agg_g['num'].values,
+                                            agg_g['rank'].values]),
+                hovertemplate=(
+                    '<b>%{x}</b><br>Cobertura: <b>%{y:.1f}%</b><br>'
+                    f'Meta: {sg_thr:.0f}%<br>'
+                    'PROG: %{customdata[0]:,}<br>EJEC: %{customdata[1]:,}<br>'
+                    'Ranking: #%{customdata[2]}<extra></extra>'
+                ),
+            ))
+
+            for ix in range(len(agg_g)):
+                hh = float(agg_g['pct'].iloc[ix])
+                cc = bc_g[ix]
+                if hh <= 0:
+                    continue
+                fg.add_shape(type='path',
+                    path=(f'M {ix+BH},{0} L {ix+BH+DX_G},{DY_G} '
+                          f'L {ix+BH+DX_G},{hh+DY_G} L {ix+BH},{hh} Z'),
+                    xref='x', yref='y', fillcolor=_darken(cc, 0.48),
+                    line=dict(color='rgba(0,0,0,0)', width=0), layer='above')
+                fg.add_shape(type='path',
+                    path=(f'M {ix-BH},{hh} L {ix+BH},{hh} '
+                          f'L {ix+BH+DX_G},{hh+DY_G} L {ix-BH+DX_G},{hh+DY_G} Z'),
+                    xref='x', yref='y', fillcolor=_lighten(cc, 1.35),
+                    line=dict(color='rgba(0,0,0,0)', width=0), layer='above')
+
+            fg.add_hline(y=pct_g, line_dash='dot', line_color='rgba(100,180,255,0.8)',
+                         line_width=2,
+                         annotation_text=f'  DIRESA: {pct_g:.1f}%',
+                         annotation_position='top right',
+                         annotation_font=dict(color='rgba(100,180,255,1)', size=12))
+            fg.add_hline(y=sg_thr, line_dash='dash', line_color='#FFB703',
+                         line_width=2.5,
+                         annotation_text=f'  META: {sg_thr:.0f}%',
+                         annotation_position='top left',
+                         annotation_font=dict(color='#FFB703', size=14))
+
+            for ix in range(len(agg_g)):
+                hh = float(agg_g['pct'].iloc[ix])
+                fg.add_annotation(
+                    x=agg_g['red'].iloc[ix], y=hh + DY_G + ymx_g * 0.028,
+                    xref='x', yref='y', text=f'<b>{hh:.1f}%</b>',
+                    showarrow=False,
+                    font=dict(size=15, color='white', family='Arial Black'),
+                    bgcolor='rgba(0,0,0,0)', borderpad=0)
+
+            fg.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                font_color='white', height=450,
+                margin=dict(l=10, r=10, t=20, b=80),
+                xaxis=dict(title='Red de Salud',
+                           gridcolor='rgba(255,255,255,0.05)',
+                           tickfont=dict(size=11, color='white', family='Arial'),
+                           tickangle=-15),
+                yaxis=dict(title='% Cobertura', range=[0, ymx_g],
+                           gridcolor='rgba(255,255,255,0.07)',
+                           ticksuffix='%', tickfont=dict(size=11)),
+                bargap=0.30, showlegend=False,
+            )
+
+            cc_d = (SEMAFORO['verde'] if pct_g >= sg_thr
+                    else (SEMAFORO['amarillo'] if pct_g >= sg_thr * 0.80
+                          else SEMAFORO['rojo']))
+            ee_d = _emoji_from_color(cc_d)
+
+            col_c, col_b = st.columns([5, 1])
+            with col_b:
+                st.markdown(f"""
+<div style="background:#112240;border:2px solid #FFB703;border-radius:12px;
+            padding:14px 10px;margin-top:28px;text-align:center;">
+  <div style="color:#FFB703;font-weight:800;font-size:0.75rem;text-transform:uppercase;
+              letter-spacing:0.06em;margin-bottom:4px;">📋 Resumen</div>
+  <div style="color:#FFB703;font-size:0.82rem;margin:6px 0;">
+    <b>META</b><br>
+    <span style="font-size:1.6rem;font-weight:900;">{sg_thr:.0f}%</span>
+  </div>
+  <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
+  <div style="color:rgba(255,255,255,0.8);font-size:0.78rem;margin:4px 0;">
+    <b>LOGRO DIRESA</b><br>
+    <span style="font-size:1.4rem;font-weight:900;color:{cc_d};">{pct_g:.1f}%</span> {ee_d}
+  </div>
+  <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
+  <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;line-height:1.7;">
+    PROG<br><b style="color:white;">{den_g:,}</b><br>
+    EJEC<br><b style="color:white;">{num_g:,}</b>
+  </div>
+</div>""", unsafe_allow_html=True)
+            with col_c:
+                st.plotly_chart(fg, use_container_width=True,
+                                key=f'chart_vph_{sg["categoria"].replace(" ", "_")}')
+
+            st.markdown(f'<div class="seccion-titulo">📋 Ranking — {sg["titulo"]}</div>',
+                        unsafe_allow_html=True)
+            tbl_g = agg_g[['rank', 'red', 'pct', 'den', 'num']].copy()
+            tbl_g['pendiente'] = (tbl_g['den'] - tbl_g['num']).clip(lower=0)
+            tbl_g['estado'] = tbl_g['pct'].apply(
+                lambda p: '🟢 En meta' if p >= sg_thr
+                else ('🟡 Cerca' if p >= sg_thr * 0.80 else '🔴 Bajo meta')
+            )
+            tbl_g.rename(columns={
+                'rank': '#', 'red': 'Red de Salud', 'pct': 'Cobertura %',
+                'den': 'PROG', 'num': 'EJEC', 'pendiente': 'Pendiente', 'estado': 'Estado',
+            }, inplace=True)
+            fila_d_g = {
+                '#': '—', 'Red de Salud': '📊 DIRESA (Total)',
+                'Cobertura %': pct_g, 'PROG': den_g, 'EJEC': num_g,
+                'Pendiente': max(0, den_g - num_g),
+                'Estado': ee_d + (' En meta' if cc_d == SEMAFORO['verde']
+                          else (' Cerca' if cc_d == SEMAFORO['amarillo'] else ' Bajo meta')),
+            }
+            tbl_d_g = pd.concat([tbl_g, pd.DataFrame([fila_d_g])], ignore_index=True)
+            st.dataframe(tbl_d_g, use_container_width=True, hide_index=True, column_config={
+                '#':            st.column_config.TextColumn('#', width='small'),
+                'Red de Salud': st.column_config.TextColumn('Red de Salud', width='large'),
+                'Cobertura %':  st.column_config.NumberColumn('Cobertura %', format='%.1f%%', width='medium'),
+                'PROG':         st.column_config.NumberColumn('PROG', format='%d', width='small'),
+                'EJEC':         st.column_config.NumberColumn('EJEC', format='%d', width='small'),
+                'Pendiente':    st.column_config.NumberColumn('Pendiente', format='%d', width='small'),
+                'Estado':       st.column_config.TextColumn('Estado', width='medium'),
+            })
+    st.stop()
+
 # ── Agrupación por RED ────────────────────────────────────────────────────────
 df_con_red = df_base[df_base['red'].str.len() > 0]
 agg = (df_con_red
