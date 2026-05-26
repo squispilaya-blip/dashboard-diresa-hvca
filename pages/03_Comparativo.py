@@ -3,9 +3,11 @@ Página 03 — Comparativo por Red de Salud
 Ranking de cobertura por Red para cada indicador con línea de meta.
 """
 import io
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import streamlit as st
-import streamlit.components.v1 as components
-import plotly.io as pio
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
@@ -23,6 +25,162 @@ st.set_page_config(
 load_css()
 require_auth()
 
+
+# ── Funciones auxiliares puras (sin variables de módulo) ─────────────────────
+
+def _hex_to_rgb(hx: str):
+    hx = hx.lstrip('#')
+    return tuple(int(hx[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _darken(hex_color: str, f: float = 0.48) -> str:
+    r, g, b = _hex_to_rgb(hex_color)
+    return f'rgb({int(r*f)},{int(g*f)},{int(b*f)})'
+
+
+def _lighten(hex_color: str, f: float = 1.35) -> str:
+    r, g, b = _hex_to_rgb(hex_color)
+    return f'rgb({min(255,int(r*f))},{min(255,int(g*f))},{min(255,int(b*f))})'
+
+
+def _emoji_from_color(c: str) -> str:
+    if c == SEMAFORO['verde']:    return '🟢'
+    if c == SEMAFORO['amarillo']: return '🟡'
+    if c == SEMAFORO['rojo']:     return '🔴'
+    return '🔵'
+
+
+def _to_mpl_color(c: str):
+    """Convierte color hex o 'rgb(r,g,b)' a formato matplotlib."""
+    if c.startswith('#'):
+        return c
+    nums = [int(v) for v in c.replace('rgb(', '').replace(')', '').split(',')]
+    return tuple(v / 255 for v in nums)
+
+
+def _chart_jpg_bytes(df_agg: pd.DataFrame, colors: list,
+                     thr_val: float, pct_dir: float, titulo: str) -> bytes:
+    """JPG del gráfico de barras generado en el servidor con matplotlib."""
+    n = len(df_agg)
+    fig_w = max(10, n * 1.6)
+    fig_m, ax = plt.subplots(figsize=(fig_w, 5.5))
+    fig_m.patch.set_facecolor('#0d1b35')
+    ax.set_facecolor('#0d1b35')
+
+    x = np.arange(n)
+    mpl_colors = [_to_mpl_color(c) for c in colors]
+    bars = ax.bar(x, df_agg['pct'].values, color=mpl_colors, width=0.6,
+                  edgecolor='white', linewidth=0.3)
+
+    pct_vals = df_agg['pct'].values
+    y_max_data = float(pct_vals.max()) if n > 0 else 0
+    y_ceil = max(y_max_data, thr_val, pct_dir, 10) * 1.35
+    ax.set_ylim(0, y_ceil)
+    y_pad = y_ceil * 0.025
+
+    for bar_obj, pct in zip(bars, pct_vals):
+        ax.text(bar_obj.get_x() + bar_obj.get_width() / 2,
+                bar_obj.get_height() + y_pad,
+                f'{pct:.1f}%', ha='center', va='bottom',
+                fontsize=9, color='white', fontweight='bold')
+
+    if thr_val > 0:
+        ax.axhline(y=thr_val, color='#FFB703', linestyle='--', linewidth=2.0,
+                   label=f'META: {thr_val:.0f}%')
+    ax.axhline(y=pct_dir, color='#64B4FF', linestyle=':', linewidth=2.0,
+               label=f'DIRESA: {pct_dir:.1f}%')
+
+    red_labels = df_agg['red'].values if 'red' in df_agg.columns else [str(i) for i in x]
+    ax.set_xticks(x)
+    ax.set_xticklabels(red_labels, rotation=-18, ha='left', fontsize=9, color='white')
+    ax.tick_params(axis='y', colors='white', labelsize=9)
+    ax.tick_params(axis='x', colors='white')
+    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0f%%'))
+    ax.set_ylabel('% Cobertura', color='white', fontsize=10)
+
+    ax.yaxis.grid(True, color='#1a2f5a', linewidth=0.7)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_edgecolor('#4a85c0')
+        spine.set_linewidth(0.8)
+
+    ax.set_title(titulo, color='white', fontsize=10, pad=8)
+    ax.legend(loc='upper right', fontsize=9, facecolor='#112240',
+              edgecolor='#4a85c0', labelcolor='white', framealpha=0.9)
+
+    plt.tight_layout(pad=0.8)
+    buf = io.BytesIO()
+    fig_m.savefig(buf, format='jpeg', dpi=150, bbox_inches='tight',
+                  facecolor='#0d1b35', edgecolor='none')
+    plt.close(fig_m)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _table_jpg_bytes(df_t: pd.DataFrame, titulo: str) -> bytes:
+    """JPG de la tabla de datos generado en el servidor con matplotlib."""
+    cols = df_t.columns.tolist()
+    n = len(df_t)
+
+    def _fmt(v, c):
+        if c == 'Cobertura %':
+            try: return f'{float(v):.1f}%'
+            except: return str(v)
+        if c in ('PROG', 'EJEC', 'Pendiente'):
+            try: return f'{int(float(v)):,}'
+            except: return str(v)
+        return '' if str(v) in ('nan', 'None') else str(v)
+
+    cell_data = [[_fmt(df_t[c].iloc[i], c) for c in cols] for i in range(n)]
+
+    fig_h = max(2.5, n * 0.42 + 1.5)
+    fig_m, ax = plt.subplots(figsize=(14, fig_h))
+    fig_m.patch.set_facecolor('#0d1b35')
+    ax.set_facecolor('#0d1b35')
+    ax.axis('off')
+
+    row_colors = []
+    txt_colors = []
+    for i in range(n):
+        if i == n - 1:
+            row_colors.append(['#003087'] * len(cols))
+            txt_colors.append(['white'] * len(cols))
+        else:
+            bg = '#EEF2FF' if i % 2 == 0 else '#FFFFFF'
+            row_colors.append([bg] * len(cols))
+            txt_colors.append(['#1a1a2e'] * len(cols))
+
+    tbl = ax.table(
+        cellText=cell_data,
+        colLabels=cols,
+        cellLoc='center',
+        loc='center',
+        cellColours=row_colors,
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(8)
+    tbl.scale(1, 1.5)
+
+    for j in range(len(cols)):
+        cell = tbl[(0, j)]
+        cell.set_facecolor('#003087')
+        cell.set_text_props(color='white', fontweight='bold')
+
+    for i in range(n):
+        for j in range(len(cols)):
+            tbl[(i + 1, j)].set_text_props(color=txt_colors[i][j])
+
+    ax.set_title(titulo, color='white', fontsize=10, pad=6)
+    plt.tight_layout(pad=0.5)
+    buf = io.BytesIO()
+    fig_m.savefig(buf, format='jpeg', dpi=150, bbox_inches='tight',
+                  facecolor='#0d1b35', edgecolor='none')
+    plt.close(fig_m)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# ── Session state ─────────────────────────────────────────────────────────────
 fichas = st.session_state.get('fichas', {})
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -59,6 +217,28 @@ def get_meta_escalonada(den: int):
         if tier['den_min'] <= den <= tier['den_max']:
             return tier['umbral'], tier['logro']
     return meta_escalonada[-1]['umbral'], meta_escalonada[-1]['logro']
+
+
+# ── Helpers de color (usan variables de módulo) ───────────────────────────────
+def _color_fijo(pct_val: float) -> str:
+    if tipo != 'pct' or logro is None:
+        return '#4a85c0'
+    if pct_val >= thr:
+        return SEMAFORO['verde']
+    elif pct_val >= thr * 0.80:
+        return SEMAFORO['amarillo']
+    else:
+        return SEMAFORO['rojo']
+
+
+def _color_escalonado(pct_val: float, den_val: int) -> str:
+    umbral_r, logro_r = get_meta_escalonada(den_val)
+    if pct_val >= logro_r * 100:
+        return SEMAFORO['verde']
+    elif pct_val >= umbral_r * 100:
+        return SEMAFORO['amarillo']
+    else:
+        return SEMAFORO['rojo']
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -117,7 +297,6 @@ if sub_grupos:
             num_g = int(df_g['num'].sum())
             pct_g = round(num_g / den_g * 100, 1) if den_g > 0 else 0
 
-            # Colores ANTES del sort
             agg_g['color'] = agg_g['pct'].apply(
                 lambda p: SEMAFORO['verde'] if p >= sg_thr
                 else (SEMAFORO['amarillo'] if p >= sg_thr * 0.80 else SEMAFORO['rojo'])
@@ -263,19 +442,26 @@ if sub_grupos:
             # Exportar
             st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
             _cat_key = sg['categoria'].replace(' ', '_')
-            _fig_tbl_g = _tbl_fig_for_dl(
-                tbl_d_g,
-                f'DIRESA Huancavelica · VPH {sg["categoria"]} · por Red · 2026'
-            )
-            _h_tbl_g = max(500, len(tbl_d_g) * 30 + 80)
+            _titulo_g = f'DIRESA Huancavelica · VPH {sg["categoria"]} · por Red · 2026'
             eg1, eg2, eg3 = st.columns(3)
             with eg1:
-                _dl_button(fg, f'vph_{_cat_key.lower()}_2026.jpg',
-                           '🖼️ Descargar Gráfico JPG', key=f'chart_vph_{_cat_key}')
+                st.download_button(
+                    label='🖼️ Descargar Gráfico JPG',
+                    data=_chart_jpg_bytes(agg_g, bc_g, sg_thr, pct_g, sg['titulo']),
+                    file_name=f'vph_{_cat_key.lower()}_2026.jpg',
+                    mime='image/jpeg',
+                    use_container_width=True,
+                    key=f'btn_chart_vph_{_cat_key}',
+                )
             with eg2:
-                _dl_button(_fig_tbl_g, f'tabla_vph_{_cat_key.lower()}_2026.jpg',
-                           '📋 Descargar Tabla JPG',
-                           w=900, h=_h_tbl_g, key=f'tbl_vph_{_cat_key}')
+                st.download_button(
+                    label='📋 Descargar Tabla JPG',
+                    data=_table_jpg_bytes(tbl_d_g, _titulo_g),
+                    file_name=f'tabla_vph_{_cat_key.lower()}_2026.jpg',
+                    mime='image/jpeg',
+                    use_container_width=True,
+                    key=f'btn_tbl_vph_{_cat_key}',
+                )
             with eg3:
                 from openpyxl.styles import Font as _Font, PatternFill as _PF, Alignment as _Al, Border as _Bd, Side as _Sd
                 out_g = io.BytesIO()
@@ -323,83 +509,6 @@ num_total = int(df_base['num'].sum())
 pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
 thr       = (logro or 0) * 100
 
-
-# ── Helpers de color ──────────────────────────────────────────────────────────
-def _color_fijo(pct_val: float) -> str:
-    if tipo != 'pct' or logro is None:
-        return '#4a85c0'
-    if pct_val >= thr:
-        return SEMAFORO['verde']
-    elif pct_val >= thr * 0.80:
-        return SEMAFORO['amarillo']
-    else:
-        return SEMAFORO['rojo']
-
-
-def _color_escalonado(pct_val: float, den_val: int) -> str:
-    umbral_r, logro_r = get_meta_escalonada(den_val)
-    if pct_val >= logro_r * 100:
-        return SEMAFORO['verde']
-    elif pct_val >= umbral_r * 100:
-        return SEMAFORO['amarillo']
-    else:
-        return SEMAFORO['rojo']
-
-
-def _emoji_from_color(c: str) -> str:
-    if c == SEMAFORO['verde']:    return '🟢'
-    if c == SEMAFORO['amarillo']: return '🟡'
-    if c == SEMAFORO['rojo']:     return '🔴'
-    return '🔵'
-
-
-def _dl_button(fig: go.Figure, filename: str, label: str,
-               w: int = 1400, h: int = 700, key: str = '') -> None:
-    """Botón de descarga JPG client-side usando Plotly JS (sin kaleido).
-    Renderiza la figura en un div oculto y dispara la descarga al hacer clic.
-    """
-    safe = (key or filename).replace('-', '_').replace('.', '_').replace(' ', '_')
-    fig_json = pio.to_json(fig)
-    html = f"""<!DOCTYPE html><html><body style="margin:0;padding:2px">
-<div id="h{safe}" style="position:fixed;left:-9999px;width:{w}px;height:{h}px"></div>
-<button onclick="(function(){{
-  var el=document.getElementById('h{safe}');
-  var btn=document.getElementById('b{safe}');
-  btn.disabled=true; btn.innerText='Generando...';
-  Plotly.react(el,{fig_json}.data,{fig_json}.layout).then(function(){{
-    return Plotly.toImage(el,{{format:'jpeg',width:{w},height:{h},scale:2}});
-  }}).then(function(url){{
-    var a=document.createElement('a');
-    a.href=url; a.download='{filename}';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    btn.disabled=false; btn.innerText='{label}';
-  }});
-}})()" id="b{safe}"
-style="background:linear-gradient(135deg,#1e3a5f,#2a5298);color:white;
-       border:1px solid #4a85c0;padding:9px 14px;border-radius:6px;cursor:pointer;
-       font-size:13px;font-family:Arial;font-weight:700;width:100%;box-sizing:border-box;">
-  {label}
-</button>
-<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-</body></html>"""
-    components.html(html, height=52)
-
-
-def _hex_to_rgb(hx: str):
-    hx = hx.lstrip('#')
-    return tuple(int(hx[i:i+2], 16) for i in (0, 2, 4))
-
-
-def _darken(hex_color: str, f: float = 0.48) -> str:
-    r, g, b = _hex_to_rgb(hex_color)
-    return f'rgb({int(r*f)},{int(g*f)},{int(b*f)})'
-
-
-def _lighten(hex_color: str, f: float = 1.35) -> str:
-    r, g, b = _hex_to_rgb(hex_color)
-    return f'rgb({min(255,int(r*f))},{min(255,int(g*f))},{min(255,int(b*f))})'
-
-
 # ── Calcular color por barra — ANTES del sort ─────────────────────────────────
 if tiene_meta_escalonada:
     agg['color']      = [_color_escalonado(row['pct'], row['den'])
@@ -421,22 +530,21 @@ agg['rank'] = range(1, len(agg) + 1)
 bar_colors  = agg['color'].tolist()
 
 # ── Parámetros 3D ─────────────────────────────────────────────────────────────
-BAR_HALF = 0.275   # mitad del ancho de barra (width=0.55)
-DX       = 0.18    # profundidad horizontal 3D
+BAR_HALF = 0.275
+DX       = 0.18
 y_max_raw = max(
     agg['pct'].max() if not agg.empty else 0,
     thr,
     pct_total,
     agg['logro_red'].max() if not agg.empty else 0,
 )
-DY   = max(y_max_raw * 0.042, 2.0)   # profundidad vertical 3D
+DY   = max(y_max_raw * 0.042, 2.0)
 y_max = (y_max_raw + DY) * 1.30
 y_max = max(y_max, 25)
 
 # ── Construcción del gráfico 3D ───────────────────────────────────────────────
 fig = go.Figure()
 
-# Barra principal (cara frontal)
 fig.add_trace(go.Bar(
     name='Cobertura 2026',
     x=agg['red'],
@@ -445,7 +553,7 @@ fig.add_trace(go.Bar(
         color=bar_colors,
         line=dict(color='rgba(255,255,255,0.25)', width=1.2),
     ),
-    text=[''] * len(agg),   # etiquetas vía annotations
+    text=[''] * len(agg),
     width=0.55,
     customdata=np.column_stack([
         agg['den'].values,
@@ -465,14 +573,11 @@ fig.add_trace(go.Bar(
     ),
 ))
 
-# Caras 3D: cara derecha + cara superior por cada barra
 for idx in range(len(agg)):
     h  = float(agg['pct'].iloc[idx])
     c  = bar_colors[idx]
     if h <= 0:
         continue
-
-    # Cara derecha (sombra lateral — más oscura)
     fig.add_shape(
         type='path',
         path=(f'M {idx + BAR_HALF},{0} '
@@ -484,8 +589,6 @@ for idx in range(len(agg)):
         line=dict(color='rgba(0,0,0,0)', width=0),
         layer='above',
     )
-
-    # Cara superior (brillo — más clara)
     fig.add_shape(
         type='path',
         path=(f'M {idx - BAR_HALF},{h} '
@@ -498,7 +601,6 @@ for idx in range(len(agg)):
         layer='above',
     )
 
-# Marcadores de meta escalonada
 if tiene_meta_escalonada:
     for i, row in agg.iterrows():
         fig.add_trace(go.Scatter(
@@ -517,7 +619,6 @@ if tiene_meta_escalonada:
             ),
         ))
 
-# Línea DIRESA
 fig.add_hline(
     y=pct_total,
     line_dash='dot',
@@ -528,7 +629,6 @@ fig.add_hline(
     annotation_font=dict(color='rgba(100,180,255,1)', size=12),
 )
 
-# Línea META fija
 if logro and tipo == 'pct' and not tiene_meta_escalonada:
     fig.add_hline(
         y=thr,
@@ -540,7 +640,6 @@ if logro and tipo == 'pct' and not tiene_meta_escalonada:
         annotation_font=dict(color='#FFB703', size=14, family='Inter'),
     )
 
-# Etiquetas de porcentaje grandes y visibles — encima de la cara superior
 for idx in range(len(agg)):
     h = float(agg['pct'].iloc[idx])
     red_name = agg['red'].iloc[idx]
@@ -735,52 +834,30 @@ elif tiene_meta_escalonada:
 # ── Exportar ──────────────────────────────────────────────────────────────────
 st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
 
-# Figura tabla para descarga JPG
-def _tbl_fig_for_dl(df_t, titulo):
-    cols = df_t.columns.tolist()
-    def _f(v, c):
-        if c == 'Cobertura %':
-            try: return f'{float(v):.1f}%'
-            except: return str(v)
-        if c in ('PROG','EJEC','Pendiente'):
-            try: return f'{int(float(v)):,}'
-            except: return str(v)
-        return '' if str(v) in ('nan','None') else str(v)
-    n = len(df_t)
-    rc = ['#EEF2FF' if i%2==0 else '#FFFFFF' for i in range(n)]
-    rc[-1] = '#003087'
-    fc = ['#FFFFFF' if x=='#003087' else '#1a1a2e' for x in rc]
-    ft = go.Figure(data=[go.Table(
-        columnwidth=[40,180]+[80]*max(0,len(cols)-2),
-        header=dict(values=[f'<b>{c}</b>' for c in cols],
-                    fill_color='#003087', align='center', height=32,
-                    font=dict(color='white',size=11,family='Arial Black')),
-        cells=dict(values=[[_f(df_t[c].iloc[i],c) for i in range(n)] for c in cols],
-                   fill_color=[rc]*len(cols), height=28,
-                   font=dict(color=[fc]*len(cols),size=11,family='Arial'),
-                   align=['left' if c=='Red de Salud' else 'center' for c in cols]),
-    )])
-    ft.update_layout(title=dict(text=f'<b>{titulo}</b>',font=dict(size=11,color='white'),x=0.5),
-                     paper_bgcolor='#0d1b35', margin=dict(l=10,r=10,t=35,b=5),
-                     height=max(220,n*30+80))
-    return ft
-
-_fig_tbl_dl = _tbl_fig_for_dl(
-    tbl_display,
-    f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · 2026'
-)
-_h_tbl = max(500, len(tbl_display) * 30 + 80)
-
 exp_col1, exp_col2, exp_col3 = st.columns(3)
 
+_titulo_export = f'Indicador {fid} — {ficha["titulo"][:50]}'
+_titulo_tbl    = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · 2026'
+
 with exp_col1:
-    _dl_button(fig, f'comparativo_red_{fid}_2026.jpg',
-               '🖼️ Descargar Gráfico JPG', key=f'chart_{fid}')
+    st.download_button(
+        label='🖼️ Descargar Gráfico JPG',
+        data=_chart_jpg_bytes(agg, bar_colors, thr, pct_total, _titulo_export),
+        file_name=f'comparativo_red_{fid}_2026.jpg',
+        mime='image/jpeg',
+        use_container_width=True,
+        key=f'btn_chart_{fid}',
+    )
 
 with exp_col2:
-    _dl_button(_fig_tbl_dl, f'tabla_red_{fid}_2026.jpg',
-               '📋 Descargar Tabla JPG',
-               w=1000, h=_h_tbl, key=f'tbl_{fid}')
+    st.download_button(
+        label='📋 Descargar Tabla JPG',
+        data=_table_jpg_bytes(tbl_display, _titulo_tbl),
+        file_name=f'tabla_red_{fid}_2026.jpg',
+        mime='image/jpeg',
+        use_container_width=True,
+        key=f'btn_tbl_{fid}',
+    )
 
 with exp_col3:
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
