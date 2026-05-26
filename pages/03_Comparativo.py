@@ -1,7 +1,7 @@
 """
 Página 03 — Comparativo por Red de Salud
-Muestra el ranking de cobertura por Red para cada indicador,
-con línea de meta, colores semáforo y tabla resumen.
+Ranking de cobertura por Red para cada indicador con línea de meta.
+Maneja meta fija, meta escalonada (Ficha 19) y tipos especiales.
 NO modifica ninguna página existente.
 """
 import streamlit as st
@@ -12,7 +12,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.auth import require_auth
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
-from utils.constants import SEMAFORO, COLORS
+from utils.constants import SEMAFORO, COLORS, INDICADORES
 
 st.set_page_config(
     page_title='Comparativo por Red',
@@ -27,7 +27,6 @@ fichas = st.session_state.get('fichas', {})
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     render_sidebar_brand()
-
     if fichas:
         ids = sorted(fichas.keys())
         st.markdown('<p class="sb-section-title">🔍 INDICADOR</p>',
@@ -38,20 +37,30 @@ with st.sidebar:
             key='comp_ficha',
             format_func=lambda x: f'{fichas[x]["icono"]} ID {x} — {fichas[x]["titulo"][:42]}',
         )
-
     render_sidebar_logout()
 
-# ── Guardia ───────────────────────────────────────────────────────────────────
 if not fichas:
     st.warning('⚠️ Primero carga los archivos Excel en la página de Inicio.')
     st.stop()
 
-ficha    = fichas[fid]
-df_base  = ficha['df']
-logro    = ficha.get('logro')
-logro_str= ficha.get('logro_str', 'N/D')
-tipo     = ficha.get('tipo', 'pct')
-unidad   = ficha.get('unidad', '%')
+ficha   = fichas[fid]
+df_base = ficha['df']
+logro   = ficha.get('logro')
+tipo    = ficha.get('tipo', 'pct')
+unidad  = ficha.get('unidad', '%')
+
+# Leer meta escalonada desde constants si existe
+meta_escalonada = INDICADORES.get(fid, {}).get('meta_escalonada', None)
+tiene_meta_escalonada = meta_escalonada is not None
+
+
+def get_meta_escalonada(den: int) -> tuple[float, float]:
+    """Retorna (umbral, logro) para meta escalonada según el denominador."""
+    for tier in meta_escalonada:
+        if tier['den_min'] <= den <= tier['den_max']:
+            return tier['umbral'], tier['logro']
+    return meta_escalonada[-1]['umbral'], meta_escalonada[-1]['logro']
+
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -66,9 +75,8 @@ st.markdown(f"""
   </div>
 </div>""", unsafe_allow_html=True)
 
-# ── Verificar que haya datos de Red ──────────────────────────────────────────
 if 'red' not in df_base.columns or not df_base['red'].str.len().gt(0).any():
-    st.warning('⚠️ Este indicador no tiene datos de Red de Salud en los archivos cargados.')
+    st.warning('⚠️ Este indicador no tiene datos de Red de Salud.')
     st.stop()
 
 # ── Agrupación por RED ────────────────────────────────────────────────────────
@@ -79,18 +87,17 @@ agg = (df_con_red
        .reset_index())
 agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'] * 100, 0).round(1)
 
-# Totales DIRESA
 den_total = int(df_base['den'].sum())
 num_total = int(df_base['num'].sum())
 pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
 
-# Umbral de meta en %
-thr = (logro or 0) * 100
+thr = (logro or 0) * 100    # meta global en % (para indicadores con meta fija)
 
 
-def _color(pct_val: float) -> str:
-    """Color semáforo según % respecto a la meta."""
-    if tipo != 'pct' or logro is None or thr == 0:
+# ── Helpers de color ──────────────────────────────────────────────────────────
+def _color_fijo(pct_val: float) -> str:
+    """Color semáforo con meta fija."""
+    if tipo != 'pct' or logro is None:
         return '#4a85c0'
     if pct_val >= thr:
         return SEMAFORO['verde']
@@ -100,13 +107,47 @@ def _color(pct_val: float) -> str:
         return SEMAFORO['rojo']
 
 
-def _emoji(pct_val: float) -> str:
-    c = _color(pct_val)
-    if c == SEMAFORO['verde']:   return '🟢'
+def _color_escalonado(pct_val: float, den_val: int) -> str:
+    """Color semáforo con meta escalonada (Ficha 19)."""
+    umbral_r, logro_r = get_meta_escalonada(den_val)
+    logro_pct  = logro_r  * 100
+    umbral_pct = umbral_r * 100
+    if pct_val >= logro_pct:
+        return SEMAFORO['verde']
+    elif pct_val >= umbral_pct:
+        return SEMAFORO['amarillo']
+    else:
+        return SEMAFORO['rojo']
+
+
+def _emoji_from_color(c: str) -> str:
+    if c == SEMAFORO['verde']:    return '🟢'
     if c == SEMAFORO['amarillo']: return '🟡'
-    if c == SEMAFORO['rojo']:    return '🔴'
+    if c == SEMAFORO['rojo']:     return '🔴'
     return '🔵'
 
+
+# ── Calcular color y meta por barra ──────────────────────────────────────────
+if tiene_meta_escalonada:
+    bar_colors  = [_color_escalonado(row['pct'], row['den'])
+                   for _, row in agg.iterrows()]
+    # Logro esperado por red (en %)
+    agg['logro_red']  = [get_meta_escalonada(d)[1] * 100 for d in agg['den']]
+    agg['umbral_red'] = [get_meta_escalonada(d)[0] * 100 for d in agg['den']]
+    # Texto de meta por barra para el tooltip
+    agg['meta_txt'] = agg.apply(
+        lambda r: f"Meta: {r['logro_red']:.0f}% (Umbral: {r['umbral_red']:.0f}%)",
+        axis=1
+    )
+    # Meta DIRESA: usar el tier del total
+    u_diresa, l_diresa = get_meta_escalonada(den_total)
+    meta_diresa_str = f"Meta DIRESA: {l_diresa*100:.0f}% (den={den_total:,})"
+else:
+    bar_colors = [_color_fijo(p) for p in agg['pct']]
+    agg['logro_red']  = thr
+    agg['umbral_red'] = thr * 0.80 if thr > 0 else 0
+    agg['meta_txt']   = f'Meta: {thr:.0f}%' if logro else 'Sin meta'
+    meta_diresa_str   = ''
 
 # Ordenar por cobertura descendente (ranking)
 agg = agg.sort_values('pct', ascending=False).reset_index(drop=True)
@@ -115,9 +156,7 @@ agg['rank'] = range(1, len(agg) + 1)
 # ── Construcción del gráfico ──────────────────────────────────────────────────
 fig = go.Figure()
 
-bar_colors  = [_color(p) for p in agg['pct']]
-text_labels = [f'<b>{p:.1f}%</b>' for p in agg['pct']]
-
+# Barras principales
 fig.add_trace(go.Bar(
     name='Cobertura 2026',
     x=agg['red'],
@@ -126,20 +165,56 @@ fig.add_trace(go.Bar(
         color=bar_colors,
         line=dict(color='rgba(255,255,255,0.15)', width=1),
     ),
-    text=text_labels,
+    text=[f'<b>{p:.1f}%</b>' for p in agg['pct']],
     textposition='outside',
     textfont=dict(size=11, color='white', family='Inter'),
     width=0.55,
-    customdata=agg[['den', 'num', 'rank']].values,
+    customdata=np.column_stack([
+        agg['den'].values,
+        agg['num'].values,
+        agg['rank'].values,
+        agg['logro_red'].values,
+        agg['meta_txt'].values,
+    ]),
     hovertemplate=(
         '<b>%{x}</b><br>'
-        'Cobertura: %{y:.1f}%<br>'
-        'PROG (den): %{customdata[0]:,}<br>'
-        'EJEC (num): %{customdata[1]:,}<br>'
+        'Cobertura: <b>%{y:.1f}%</b><br>'
+        '%{customdata[4]}<br>'
+        'PROG: %{customdata[0]:,}<br>'
+        'EJEC: %{customdata[1]:,}<br>'
         'Ranking: #%{customdata[2]}'
         '<extra></extra>'
     ),
 ))
+
+# ── Para meta escalonada: marcadores de logro esperado por barra ─────────────
+if tiene_meta_escalonada:
+    # Líneas individuales de logro por cada red (como segmentos de scatter)
+    for i, row in agg.iterrows():
+        x_pos = row['red']
+        fig.add_trace(go.Scatter(
+            x=[x_pos],
+            y=[row['logro_red']],
+            mode='markers',
+            marker=dict(
+                symbol='line-ew',
+                size=22,
+                color='#FFB703',
+                line=dict(color='#FFB703', width=3),
+            ),
+            name='Meta' if i == 0 else '',
+            showlegend=(i == 0),
+            hovertemplate=(
+                f'<b>{x_pos}</b><br>'
+                f'Meta esperada: {row["logro_red"]:.0f}%<br>'
+                f'Umbral mínimo: {row["umbral_red"]:.0f}%'
+                '<extra></extra>'
+            ),
+        ))
+    # Nota explicativa escalonada
+    nota_escalonada = True
+else:
+    nota_escalonada = False
 
 # Línea DIRESA (referencia total)
 fig.add_hline(
@@ -152,8 +227,8 @@ fig.add_hline(
     annotation_font=dict(color='rgba(100,180,255,0.9)', size=11),
 )
 
-# Línea META (solo indicadores tipo pct con meta definida)
-if logro and tipo == 'pct':
+# Línea META fija (solo si hay meta global fija)
+if logro and tipo == 'pct' and not tiene_meta_escalonada:
     fig.add_hline(
         y=thr,
         line_dash='dash',
@@ -164,15 +239,20 @@ if logro and tipo == 'pct':
         annotation_font=dict(color='#FFB703', size=13, family='Inter'),
     )
 
-y_max = max(agg['pct'].max() if not agg.empty else 0, thr, pct_total) * 1.3
+y_max = max(
+    agg['pct'].max() if not agg.empty else 0,
+    thr,
+    pct_total,
+    agg['logro_red'].max() if not agg.empty else 0,
+) * 1.3
 y_max = max(y_max, 20)
 
 fig.update_layout(
     plot_bgcolor='rgba(0,0,0,0)',
     paper_bgcolor='rgba(0,0,0,0)',
     font_color='white',
-    height=430,
-    margin=dict(l=10, r=10, t=30, b=60),
+    height=450,
+    margin=dict(l=10, r=10, t=30, b=70),
     xaxis=dict(
         title='Red de Salud',
         gridcolor='rgba(255,255,255,0.06)',
@@ -186,28 +266,47 @@ fig.update_layout(
         ticksuffix='%',
     ),
     bargap=0.25,
-    showlegend=False,
+    showlegend=tiene_meta_escalonada,
+    legend=dict(
+        font=dict(color='white', size=10),
+        bgcolor='rgba(0,0,0,0.3)',
+        x=0.01, y=0.99,
+    ),
 )
 
 # ── Layout: gráfico + caja de resumen ────────────────────────────────────────
 col_chart, col_box = st.columns([5, 1])
 
-# Caja lateral con META y LOGRO DIRESA
 with col_box:
-    color_diresa = _color(pct_total)
-    emoji_diresa = _emoji(pct_total)
-
-    if logro and tipo == 'pct':
+    # Color del logro DIRESA
+    if tiene_meta_escalonada:
+        u_d, l_d = get_meta_escalonada(den_total)
+        color_diresa = _color_escalonado(pct_total, den_total)
+        meta_box_html = f"""
+  <div style="color:#FFB703;font-size:0.75rem;margin:4px 0;">
+    <b>META (den={den_total:,})</b><br>
+    <span style="font-size:1.3rem;font-weight:900;">{l_d*100:.0f}%</span>
+  </div>
+  <div style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin:2px 0;">
+    Umbral: {u_d*100:.0f}%
+  </div>"""
         border_color = '#FFB703'
-        meta_html = f"""
+    elif logro and tipo == 'pct':
+        color_diresa = _color_fijo(pct_total)
+        meta_box_html = f"""
   <div style="color:#FFB703;font-size:0.82rem;margin:6px 0;">
     <b>META</b><br>
     <span style="font-size:1.6rem;font-weight:900;">{thr:.0f}%</span>
-  </div>
-  <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">"""
+  </div>"""
+        border_color = '#FFB703'
     else:
+        color_diresa = '#4a85c0'
+        meta_box_html = '<div style="color:rgba(255,255,255,0.4);font-size:0.75rem;">Sin meta fija</div>'
         border_color = '#4a85c0'
-        meta_html = '<div style="color:rgba(255,255,255,0.4);font-size:0.75rem;">Sin meta definida</div><hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">'
+
+    emoji_diresa = _emoji_from_color(color_diresa)
+    logro_color  = ({'#2DC653': '#2DC653', '#FFB703': '#FFB703', '#E63946': '#E63946'}
+                    .get(color_diresa, '#4a85c0'))
 
     st.markdown(f"""
 <div style="background:#112240;border:2px solid {border_color};border-radius:12px;
@@ -215,16 +314,16 @@ with col_box:
   <div style="color:{border_color};font-weight:800;font-size:0.75rem;
               text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">
     📋 Resumen</div>
-  {meta_html}
+  {meta_box_html}
+  <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
   <div style="color:rgba(255,255,255,0.8);font-size:0.78rem;margin:4px 0;">
     <b>LOGRO DIRESA</b><br>
-    <span style="font-size:1.4rem;font-weight:900;
-                 color:{'#2DC653' if color_diresa==SEMAFORO['verde'] else ('#FFB703' if color_diresa==SEMAFORO['amarillo'] else '#E63946')};">
+    <span style="font-size:1.4rem;font-weight:900;color:{logro_color};">
       {pct_total:.1f}%
     </span> {emoji_diresa}
   </div>
   <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
-  <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;line-height:1.6;">
+  <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;line-height:1.7;">
     PROG<br><b style="color:white;">{den_total:,}</b><br>
     EJEC<br><b style="color:white;">{num_total:,}</b>
   </div>
@@ -233,6 +332,22 @@ with col_box:
 with col_chart:
     st.plotly_chart(fig, use_container_width=True)
 
+# ── Nota especial meta escalonada ─────────────────────────────────────────────
+if nota_escalonada:
+    st.info("""
+**📋 Meta escalonada — Depresión (Ficha 19)**
+La meta varía según el N° de pacientes con diagnóstico de depresión en cada Red:
+
+| Pacientes (PROG) | Umbral mínimo | **Logro esperado** |
+|---|---|---|
+| > 150 | 20% | **30%** |
+| 101 – 150 | 30% | **40%** |
+| 60 – 100 | 35% | **50%** |
+| 40 – 59 | 40% | **60%** |
+
+Las marcas **—** sobre cada barra indican el logro esperado específico de esa Red.
+""")
+
 # ── Tabla de ranking ──────────────────────────────────────────────────────────
 st.markdown('<div class="seccion-titulo">📋 Ranking de Redes — Tabla Resumen</div>',
             unsafe_allow_html=True)
@@ -240,63 +355,83 @@ st.markdown('<div class="seccion-titulo">📋 Ranking de Redes — Tabla Resumen
 tbl = agg[['rank', 'red', 'pct', 'den', 'num']].copy()
 tbl['pendiente'] = (tbl['den'] - tbl['num']).clip(lower=0)
 
-if logro and tipo == 'pct':
+if tiene_meta_escalonada:
+    tbl['meta_%']  = agg['logro_red'].apply(lambda x: f'{x:.0f}%')
+    tbl['estado']  = [
+        _emoji_from_color(c) + (
+            ' En meta' if c == SEMAFORO['verde']
+            else (' Cerca'    if c == SEMAFORO['amarillo'] else ' Bajo meta')
+        )
+        for c in bar_colors
+    ]
+elif logro and tipo == 'pct':
     tbl['estado'] = tbl['pct'].apply(
         lambda p: '🟢 En meta' if p >= thr
         else ('🟡 Cerca' if p >= thr * 0.80 else '🔴 Bajo meta')
     )
-    col_cfg_extra = {'estado': st.column_config.TextColumn('Estado', width='medium')}
-else:
-    col_cfg_extra = {}
 
 tbl = tbl.rename(columns={
-    'rank':       '#',
-    'red':        'Red de Salud',
-    'pct':        'Cobertura %',
-    'den':        'PROG',
-    'num':        'EJEC',
-    'pendiente':  'Pendiente',
-    'estado':     'Estado',
+    'rank': '#', 'red': 'Red de Salud',
+    'pct': 'Cobertura %', 'den': 'PROG', 'num': 'EJEC',
+    'pendiente': 'Pendiente', 'meta_%': 'Meta', 'estado': 'Estado',
 })
 
-# Fila DIRESA al final como referencia total
-fila_diresa = pd.DataFrame([{
-    '#': '—',
-    'Red de Salud': '📊 DIRESA (Total)',
+# Fila DIRESA al final como referencia
+fila_d: dict = {
+    '#': '—', 'Red de Salud': '📊 DIRESA (Total)',
     'Cobertura %': pct_total,
-    'PROG': den_total,
-    'EJEC': num_total,
+    'PROG': den_total, 'EJEC': num_total,
     'Pendiente': max(0, den_total - num_total),
-}])
-if 'Estado' in tbl.columns:
-    fila_diresa['Estado'] = _emoji(pct_total) + (
-        ' En meta' if pct_total >= thr else (' Cerca' if pct_total >= thr * 0.8 else ' Bajo meta')
+}
+if tiene_meta_escalonada:
+    fila_d['Meta'] = f'{l_d*100:.0f}%'
+    fila_d['Estado'] = emoji_diresa + (
+        ' En meta' if color_diresa == SEMAFORO['verde']
+        else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Bajo meta')
+    )
+elif logro and tipo == 'pct':
+    c_d = _color_fijo(pct_total)
+    fila_d['Estado'] = _emoji_from_color(c_d) + (
+        ' En meta' if c_d == SEMAFORO['verde']
+        else (' Cerca' if c_d == SEMAFORO['amarillo'] else ' Bajo meta')
     )
 
-tbl_display = pd.concat([tbl, fila_diresa], ignore_index=True)
+tbl_display = pd.concat([tbl, pd.DataFrame([fila_d])], ignore_index=True)
 
-st.dataframe(
-    tbl_display,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        '#':            st.column_config.TextColumn('#', width='small'),
-        'Red de Salud': st.column_config.TextColumn('Red de Salud', width='large'),
-        'Cobertura %':  st.column_config.NumberColumn('Cobertura %', format='%.1f%%', width='medium'),
-        'PROG':         st.column_config.NumberColumn('PROG', format='%d', width='small'),
-        'EJEC':         st.column_config.NumberColumn('EJEC', format='%d', width='small'),
-        'Pendiente':    st.column_config.NumberColumn('Pendiente', format='%d', width='small'),
-        **col_cfg_extra,
-    },
-)
+col_cfg = {
+    '#':            st.column_config.TextColumn('#', width='small'),
+    'Red de Salud': st.column_config.TextColumn('Red de Salud', width='large'),
+    'Cobertura %':  st.column_config.NumberColumn('Cobertura %', format='%.1f%%', width='medium'),
+    'PROG':         st.column_config.NumberColumn('PROG', format='%d', width='small'),
+    'EJEC':         st.column_config.NumberColumn('EJEC', format='%d', width='small'),
+    'Pendiente':    st.column_config.NumberColumn('Pendiente', format='%d', width='small'),
+}
+if 'Meta' in tbl_display.columns:
+    col_cfg['Meta'] = st.column_config.TextColumn('Meta', width='small')
+if 'Estado' in tbl_display.columns:
+    col_cfg['Estado'] = st.column_config.TextColumn('Estado', width='medium')
 
-# Leyenda de colores
-if logro and tipo == 'pct':
+st.dataframe(tbl_display, use_container_width=True, hide_index=True,
+             column_config=col_cfg)
+
+# ── Leyenda de colores ────────────────────────────────────────────────────────
+if logro and tipo == 'pct' and not tiene_meta_escalonada:
     st.markdown(f"""
-<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:0.8rem;color:#8892a4;">
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;
+            font-size:0.8rem;color:#8892a4;">
   <span>🟢 En meta &nbsp;(≥ {thr:.0f}%)</span>
-  <span>🟡 Cerca de meta &nbsp;(≥ {thr*0.8:.0f}%)</span>
+  <span>🟡 Cerca &nbsp;(≥ {thr*0.8:.0f}%)</span>
   <span>🔴 Bajo meta &nbsp;(< {thr*0.8:.0f}%)</span>
   <span style="color:rgba(100,180,255,0.7);">― ― DIRESA total</span>
   <span style="color:#FFB703;">--- META {thr:.0f}%</span>
+</div>""", unsafe_allow_html=True)
+elif tiene_meta_escalonada:
+    st.markdown("""
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;
+            font-size:0.8rem;color:#8892a4;">
+  <span>🟢 Alcanzó su logro esperado</span>
+  <span>🟡 Entre umbral y logro esperado</span>
+  <span>🔴 Por debajo del umbral mínimo</span>
+  <span style="color:#FFB703;">— Meta individual por red</span>
+  <span style="color:rgba(100,180,255,0.7);">― ― DIRESA total</span>
 </div>""", unsafe_allow_html=True)

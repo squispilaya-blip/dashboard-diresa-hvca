@@ -44,7 +44,15 @@ INDICADORES = {
     '17': {'nombre': 'Porcentaje de niños y niñas menores de 5 años con deficiencias o factores de riesgo de discapacidad, con seis o más atenciones en la UPSS Medicina de Rehabilitación',
            'logro_default': 0.30, 'icono': '♿'},
     '19': {'nombre': 'Porcentaje de personas con diagnóstico de depresión que recibieron paquete estándar de intervenciones',
-           'logro_default': None, 'icono': '🧠'},
+           'logro_default': None, 'icono': '🧠',
+           # Meta escalonada según N° de pacientes con diagnóstico de depresión (den)
+           # Fuente: Ficha técnica DL 1153 2026
+           'meta_escalonada': [
+               {'den_min': 151, 'den_max': 99999, 'umbral': 0.20, 'logro': 0.30},
+               {'den_min': 101, 'den_max': 150,   'umbral': 0.30, 'logro': 0.40},
+               {'den_min':  60, 'den_max': 100,   'umbral': 0.35, 'logro': 0.50},
+               {'den_min':   0, 'den_max':  59,   'umbral': 0.40, 'logro': 0.60},
+           ]},
     '25': {'nombre': 'Promedio de espera para la atención en Consulta Externa de un paciente referido',
            'logro_default': None, 'icono': '⏱️',
            'tipo': 'promedio', 'unidad': 'hrs'},
