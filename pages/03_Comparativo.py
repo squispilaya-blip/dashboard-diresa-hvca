@@ -1,9 +1,8 @@
 """
 Página 03 — Comparativo por Red de Salud
 Ranking de cobertura por Red para cada indicador con línea de meta.
-Maneja meta fija, meta escalonada (Ficha 19) y tipos especiales.
-NO modifica ninguna página existente.
 """
+import io
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -49,13 +48,11 @@ logro   = ficha.get('logro')
 tipo    = ficha.get('tipo', 'pct')
 unidad  = ficha.get('unidad', '%')
 
-# Leer meta escalonada desde constants si existe
-meta_escalonada = INDICADORES.get(fid, {}).get('meta_escalonada', None)
+meta_escalonada      = INDICADORES.get(fid, {}).get('meta_escalonada', None)
 tiene_meta_escalonada = meta_escalonada is not None
 
 
-def get_meta_escalonada(den: int) -> tuple[float, float]:
-    """Retorna (umbral, logro) para meta escalonada según el denominador."""
+def get_meta_escalonada(den: int):
     for tier in meta_escalonada:
         if tier['den_min'] <= den <= tier['den_max']:
             return tier['umbral'], tier['logro']
@@ -91,12 +88,11 @@ den_total = int(df_base['den'].sum())
 num_total = int(df_base['num'].sum())
 pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
 
-thr = (logro or 0) * 100    # meta global en % (para indicadores con meta fija)
+thr = (logro or 0) * 100
 
 
 # ── Helpers de color ──────────────────────────────────────────────────────────
 def _color_fijo(pct_val: float) -> str:
-    """Color semáforo con meta fija."""
     if tipo != 'pct' or logro is None:
         return '#4a85c0'
     if pct_val >= thr:
@@ -108,13 +104,10 @@ def _color_fijo(pct_val: float) -> str:
 
 
 def _color_escalonado(pct_val: float, den_val: int) -> str:
-    """Color semáforo con meta escalonada (Ficha 19)."""
     umbral_r, logro_r = get_meta_escalonada(den_val)
-    logro_pct  = logro_r  * 100
-    umbral_pct = umbral_r * 100
-    if pct_val >= logro_pct:
+    if pct_val >= logro_r * 100:
         return SEMAFORO['verde']
-    elif pct_val >= umbral_pct:
+    elif pct_val >= umbral_r * 100:
         return SEMAFORO['amarillo']
     else:
         return SEMAFORO['rojo']
@@ -127,36 +120,31 @@ def _emoji_from_color(c: str) -> str:
     return '🔵'
 
 
-# ── Calcular color y meta por barra ──────────────────────────────────────────
+# ── Calcular color y meta por barra — ANTES del sort ─────────────────────────
 if tiene_meta_escalonada:
-    bar_colors  = [_color_escalonado(row['pct'], row['den'])
-                   for _, row in agg.iterrows()]
-    # Logro esperado por red (en %)
+    agg['color']      = [_color_escalonado(row['pct'], row['den'])
+                         for _, row in agg.iterrows()]
     agg['logro_red']  = [get_meta_escalonada(d)[1] * 100 for d in agg['den']]
     agg['umbral_red'] = [get_meta_escalonada(d)[0] * 100 for d in agg['den']]
-    # Texto de meta por barra para el tooltip
-    agg['meta_txt'] = agg.apply(
-        lambda r: f"Meta: {r['logro_red']:.0f}% (Umbral: {r['umbral_red']:.0f}%)",
-        axis=1
-    )
-    # Meta DIRESA: usar el tier del total
+    agg['meta_txt']   = agg.apply(
+        lambda r: f"Meta: {r['logro_red']:.0f}% (Umbral: {r['umbral_red']:.0f}%)", axis=1)
     u_diresa, l_diresa = get_meta_escalonada(den_total)
-    meta_diresa_str = f"Meta DIRESA: {l_diresa*100:.0f}% (den={den_total:,})"
 else:
-    bar_colors = [_color_fijo(p) for p in agg['pct']]
+    agg['color']      = [_color_fijo(p) for p in agg['pct']]
     agg['logro_red']  = thr
     agg['umbral_red'] = thr * 0.80 if thr > 0 else 0
     agg['meta_txt']   = f'Meta: {thr:.0f}%' if logro else 'Sin meta'
-    meta_diresa_str   = ''
 
-# Ordenar por cobertura descendente (ranking)
+# Ordenar por cobertura descendente — colores ya están bien asignados
 agg = agg.sort_values('pct', ascending=False).reset_index(drop=True)
 agg['rank'] = range(1, len(agg) + 1)
+
+# Extraer colores DESPUÉS del sort (ya vienen como columna)
+bar_colors = agg['color'].tolist()
 
 # ── Construcción del gráfico ──────────────────────────────────────────────────
 fig = go.Figure()
 
-# Barras principales
 fig.add_trace(go.Bar(
     name='Cobertura 2026',
     x=agg['red'],
@@ -187,13 +175,11 @@ fig.add_trace(go.Bar(
     ),
 ))
 
-# ── Para meta escalonada: marcadores de logro esperado por barra ─────────────
+# Marcadores de meta escalonada (una marca por barra)
 if tiene_meta_escalonada:
-    # Líneas individuales de logro por cada red (como segmentos de scatter)
     for i, row in agg.iterrows():
-        x_pos = row['red']
         fig.add_trace(go.Scatter(
-            x=[x_pos],
+            x=[row['red']],
             y=[row['logro_red']],
             mode='markers',
             marker=dict(
@@ -205,18 +191,14 @@ if tiene_meta_escalonada:
             name='Meta' if i == 0 else '',
             showlegend=(i == 0),
             hovertemplate=(
-                f'<b>{x_pos}</b><br>'
+                f'<b>{row["red"]}</b><br>'
                 f'Meta esperada: {row["logro_red"]:.0f}%<br>'
                 f'Umbral mínimo: {row["umbral_red"]:.0f}%'
                 '<extra></extra>'
             ),
         ))
-    # Nota explicativa escalonada
-    nota_escalonada = True
-else:
-    nota_escalonada = False
 
-# Línea DIRESA (referencia total)
+# Línea DIRESA
 fig.add_hline(
     y=pct_total,
     line_dash='dot',
@@ -227,7 +209,7 @@ fig.add_hline(
     annotation_font=dict(color='rgba(100,180,255,0.9)', size=11),
 )
 
-# Línea META fija (solo si hay meta global fija)
+# Línea META fija
 if logro and tipo == 'pct' and not tiene_meta_escalonada:
     fig.add_hline(
         y=thr,
@@ -274,14 +256,13 @@ fig.update_layout(
     ),
 )
 
-# ── Layout: gráfico + caja de resumen ────────────────────────────────────────
+# ── Caja resumen ──────────────────────────────────────────────────────────────
 col_chart, col_box = st.columns([5, 1])
 
 with col_box:
-    # Color del logro DIRESA
     if tiene_meta_escalonada:
         u_d, l_d = get_meta_escalonada(den_total)
-        color_diresa = _color_escalonado(pct_total, den_total)
+        color_diresa  = _color_escalonado(pct_total, den_total)
         meta_box_html = f"""
   <div style="color:#FFB703;font-size:0.75rem;margin:4px 0;">
     <b>META (den={den_total:,})</b><br>
@@ -292,7 +273,7 @@ with col_box:
   </div>"""
         border_color = '#FFB703'
     elif logro and tipo == 'pct':
-        color_diresa = _color_fijo(pct_total)
+        color_diresa  = _color_fijo(pct_total)
         meta_box_html = f"""
   <div style="color:#FFB703;font-size:0.82rem;margin:6px 0;">
     <b>META</b><br>
@@ -300,13 +281,13 @@ with col_box:
   </div>"""
         border_color = '#FFB703'
     else:
-        color_diresa = '#4a85c0'
+        color_diresa  = '#4a85c0'
         meta_box_html = '<div style="color:rgba(255,255,255,0.4);font-size:0.75rem;">Sin meta fija</div>'
-        border_color = '#4a85c0'
+        border_color  = '#4a85c0'
 
     emoji_diresa = _emoji_from_color(color_diresa)
-    logro_color  = ({'#2DC653': '#2DC653', '#FFB703': '#FFB703', '#E63946': '#E63946'}
-                    .get(color_diresa, '#4a85c0'))
+    logro_color  = ({'#2DC653': '#2DC653', '#FFB703': '#FFB703',
+                     '#E63946': '#E63946'}.get(color_diresa, '#4a85c0'))
 
     st.markdown(f"""
 <div style="background:#112240;border:2px solid {border_color};border-radius:12px;
@@ -330,10 +311,10 @@ with col_box:
 </div>""", unsafe_allow_html=True)
 
 with col_chart:
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key='chart_comparativo')
 
-# ── Nota especial meta escalonada ─────────────────────────────────────────────
-if nota_escalonada:
+# ── Nota meta escalonada ──────────────────────────────────────────────────────
+if tiene_meta_escalonada:
     st.info("""
 **📋 Meta escalonada — Depresión (Ficha 19)**
 La meta varía según el N° de pacientes con diagnóstico de depresión en cada Red:
@@ -343,7 +324,7 @@ La meta varía según el N° de pacientes con diagnóstico de depresión en cada
 | > 150 | 20% | **30%** |
 | 101 – 150 | 30% | **40%** |
 | 60 – 100 | 35% | **50%** |
-| 40 – 59 | 40% | **60%** |
+| < 60 | 40% | **60%** |
 
 Las marcas **—** sobre cada barra indican el logro esperado específico de esa Red.
 """)
@@ -356,11 +337,11 @@ tbl = agg[['rank', 'red', 'pct', 'den', 'num']].copy()
 tbl['pendiente'] = (tbl['den'] - tbl['num']).clip(lower=0)
 
 if tiene_meta_escalonada:
-    tbl['meta_%']  = agg['logro_red'].apply(lambda x: f'{x:.0f}%')
-    tbl['estado']  = [
+    tbl['meta_%'] = agg['logro_red'].apply(lambda x: f'{x:.0f}%')
+    tbl['estado'] = [
         _emoji_from_color(c) + (
             ' En meta' if c == SEMAFORO['verde']
-            else (' Cerca'    if c == SEMAFORO['amarillo'] else ' Bajo meta')
+            else (' Cerca' if c == SEMAFORO['amarillo'] else ' Bajo meta')
         )
         for c in bar_colors
     ]
@@ -376,7 +357,7 @@ tbl = tbl.rename(columns={
     'pendiente': 'Pendiente', 'meta_%': 'Meta', 'estado': 'Estado',
 })
 
-# Fila DIRESA al final como referencia
+# Fila DIRESA al final
 fila_d: dict = {
     '#': '—', 'Red de Salud': '📊 DIRESA (Total)',
     'Cobertura %': pct_total,
@@ -384,7 +365,7 @@ fila_d: dict = {
     'Pendiente': max(0, den_total - num_total),
 }
 if tiene_meta_escalonada:
-    fila_d['Meta'] = f'{l_d*100:.0f}%'
+    fila_d['Meta']   = f'{l_d*100:.0f}%'
     fila_d['Estado'] = emoji_diresa + (
         ' En meta' if color_diresa == SEMAFORO['verde']
         else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Bajo meta')
@@ -407,21 +388,20 @@ col_cfg = {
     'Pendiente':    st.column_config.NumberColumn('Pendiente', format='%d', width='small'),
 }
 if 'Meta' in tbl_display.columns:
-    col_cfg['Meta'] = st.column_config.TextColumn('Meta', width='small')
+    col_cfg['Meta']   = st.column_config.TextColumn('Meta', width='small')
 if 'Estado' in tbl_display.columns:
     col_cfg['Estado'] = st.column_config.TextColumn('Estado', width='medium')
 
-st.dataframe(tbl_display, use_container_width=True, hide_index=True,
-             column_config=col_cfg)
+st.dataframe(tbl_display, use_container_width=True, hide_index=True, column_config=col_cfg)
 
-# ── Leyenda de colores ────────────────────────────────────────────────────────
+# ── Leyenda ───────────────────────────────────────────────────────────────────
 if logro and tipo == 'pct' and not tiene_meta_escalonada:
     st.markdown(f"""
 <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;
             font-size:0.8rem;color:#8892a4;">
-  <span>🟢 En meta &nbsp;(≥ {thr:.0f}%)</span>
-  <span>🟡 Cerca &nbsp;(≥ {thr*0.8:.0f}%)</span>
-  <span>🔴 Bajo meta &nbsp;(< {thr*0.8:.0f}%)</span>
+  <span>🟢 En meta (≥ {thr:.0f}%)</span>
+  <span>🟡 Cerca (≥ {thr*0.8:.0f}%)</span>
+  <span>🔴 Bajo meta (< {thr*0.8:.0f}%)</span>
   <span style="color:rgba(100,180,255,0.7);">― ― DIRESA total</span>
   <span style="color:#FFB703;">--- META {thr:.0f}%</span>
 </div>""", unsafe_allow_html=True)
@@ -435,3 +415,72 @@ elif tiene_meta_escalonada:
   <span style="color:#FFB703;">— Meta individual por red</span>
   <span style="color:rgba(100,180,255,0.7);">― ― DIRESA total</span>
 </div>""", unsafe_allow_html=True)
+
+# ── Exportar ──────────────────────────────────────────────────────────────────
+st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
+
+exp_col1, exp_col2 = st.columns(2)
+
+with exp_col1:
+    # Exportar gráfico como HTML interactivo
+    html_bytes = fig.to_html(full_html=True, include_plotlyjs='cdn').encode('utf-8')
+    st.download_button(
+        label='🖼️ Descargar gráfico (HTML interactivo)',
+        data=html_bytes,
+        file_name=f'comparativo_red_{fid}_2026.html',
+        mime='text/html',
+        use_container_width=True,
+    )
+
+with exp_col2:
+    # Exportar tabla como Excel
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Preparar datos para Excel (sin emojis en Estado para mejor compatibilidad)
+        tbl_excel = tbl_display.copy()
+        # Convertir Cobertura % a número para Excel
+        if 'Cobertura %' in tbl_excel.columns:
+            tbl_excel['Cobertura %'] = pd.to_numeric(tbl_excel['Cobertura %'], errors='coerce')
+
+        tbl_excel.to_excel(writer, index=False, sheet_name='Comparativo por Red',
+                           startrow=3)
+        ws = writer.sheets['Comparativo por Red']
+
+        # Encabezado del reporte
+        ws['A1'] = f'DIRESA HUANCAVELICA — Comparativo por Red — Indicador {fid}'
+        ws['A2'] = ficha['titulo']
+        ws['A3'] = f'Año: 2026    PROG: {den_total:,}    EJEC: {num_total:,}    Cobertura DIRESA: {pct_total:.1f}%'
+
+        # Ancho de columnas
+        ws.column_dimensions['A'].width = 6
+        ws.column_dimensions['B'].width = 30
+        ws.column_dimensions['C'].width = 14
+        ws.column_dimensions['D'].width = 10
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 12
+        if 'Meta' in tbl_display.columns:
+            ws.column_dimensions['G'].width = 8
+        if 'Estado' in tbl_display.columns:
+            ws.column_dimensions['H'].width = 18
+
+        from openpyxl.styles import Font, PatternFill, Alignment
+        # Estilo título
+        ws['A1'].font = Font(bold=True, size=13)
+        ws['A2'].font = Font(italic=True, size=10)
+        ws['A3'].font = Font(size=10, color='444444')
+        # Estilo encabezados de la tabla (fila 4)
+        header_fill = PatternFill('solid', start_color='003087', end_color='003087')
+        header_font = Font(bold=True, color='FFFFFF', size=10)
+        for cell in ws[4]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+
+    excel_bytes = output.getvalue()
+    st.download_button(
+        label='📊 Descargar tabla (Excel)',
+        data=excel_bytes,
+        file_name=f'comparativo_red_{fid}_2026.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        use_container_width=True,
+    )
