@@ -59,7 +59,8 @@ def _to_mpl_color(c: str):
 
 
 def _chart_jpg_bytes(df_agg: pd.DataFrame, colors: list,
-                     thr_val: float, pct_dir: float, titulo: str) -> bytes:
+                     thr_val: float, pct_dir: float, titulo: str,
+                     val_suf: str = '%', y_label: str = '% Cobertura') -> bytes:
     """JPG del gráfico de barras generado en el servidor con matplotlib."""
     n = len(df_agg)
     fig_w = max(10, n * 1.6)
@@ -81,22 +82,25 @@ def _chart_jpg_bytes(df_agg: pd.DataFrame, colors: list,
     for bar_obj, pct in zip(bars, pct_vals):
         ax.text(bar_obj.get_x() + bar_obj.get_width() / 2,
                 bar_obj.get_height() + y_pad,
-                f'{pct:.1f}%', ha='center', va='bottom',
+                f'{pct:.1f}{val_suf}', ha='center', va='bottom',
                 fontsize=9, color='white', fontweight='bold')
 
     if thr_val > 0:
         ax.axhline(y=thr_val, color='#FFB703', linestyle='--', linewidth=2.0,
-                   label=f'META: {thr_val:.0f}%')
+                   label=f'META: {thr_val:.0f}{val_suf}')
     ax.axhline(y=pct_dir, color='#64B4FF', linestyle=':', linewidth=2.0,
-               label=f'DIRESA: {pct_dir:.1f}%')
+               label=f'DIRESA: {pct_dir:.1f}{val_suf}')
 
     red_labels = df_agg['red'].values if 'red' in df_agg.columns else [str(i) for i in x]
     ax.set_xticks(x)
     ax.set_xticklabels(red_labels, rotation=-18, ha='left', fontsize=9, color='white')
     ax.tick_params(axis='y', colors='white', labelsize=9)
     ax.tick_params(axis='x', colors='white')
-    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0f%%'))
-    ax.set_ylabel('% Cobertura', color='white', fontsize=10)
+    ax.yaxis.set_major_formatter(
+        mtick.FormatStrFormatter('%.0f%%') if val_suf == '%'
+        else mtick.FuncFormatter(lambda v, _: f'{v:.1f}')
+    )
+    ax.set_ylabel(y_label, color='white', fontsize=10)
 
     ax.yaxis.grid(True, color='#1a2f5a', linewidth=0.7)
     ax.set_axisbelow(True)
@@ -134,6 +138,9 @@ def _table_jpg_bytes(df_t: pd.DataFrame, titulo: str) -> bytes:
     def _fmt(v, c):
         if c == 'Cobertura %':
             try: return f'{float(v):.1f}%'
+            except: return _clean(str(v))
+        if c == 'Tasa (×10,000)':
+            try: return f'{float(v):.1f}'
             except: return _clean(str(v))
         if c in ('PROG', 'EJEC', 'Pendiente'):
             try: return f'{int(float(v)):,}'
@@ -193,7 +200,8 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
                     thr_val: float, pct_dir: float,
                     den_total: int, num_total: int,
                     tbl_df: pd.DataFrame, fid: str, titulo: str,
-                    color_diresa_hex: str) -> bytes:
+                    color_diresa_hex: str,
+                    val_suf: str = '%', y_label: str = '% Cobertura') -> bytes:
     """JPG completo del dashboard: header + grafico + caja resumen + tabla + leyenda."""
     import re
     from matplotlib.gridspec import GridSpec
@@ -208,6 +216,9 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
     def _fmt_c(v, col):
         if col == 'Cobertura %':
             try: return f'{float(v):.1f}%'
+            except: return _c(str(v))
+        if col == 'Tasa (×10,000)':
+            try: return f'{float(v):.1f}'
             except: return _c(str(v))
         if col in ('PROG', 'EJEC', 'Pendiente'):
             try: return f'{int(float(v)):,}'
@@ -273,23 +284,26 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
 
     for b, p in zip(bs, pv):
         ax_c.text(b.get_x() + b.get_width() / 2,
-                  b.get_height() + ypad, f'{p:.1f}%',
+                  b.get_height() + ypad, f'{p:.1f}{val_suf}',
                   ha='center', va='bottom', fontsize=9.5,
                   color='white', fontweight='bold')
 
     if thr_val > 0:
         ax_c.axhline(thr_val, color='#FFB703', ls='--', lw=2,
-                     label=f'META: {thr_val:.0f}%')
+                     label=f'META: {thr_val:.0f}{val_suf}')
     ax_c.axhline(pct_dir, color='#64B4FF', ls=':', lw=2,
-                 label=f'DIRESA: {pct_dir:.1f}%')
+                 label=f'DIRESA: {pct_dir:.1f}{val_suf}')
 
     rl = df_agg['red'].values if 'red' in df_agg.columns else [str(i) for i in x]
     ax_c.set_xticks(x)
     ax_c.set_xticklabels(rl, rotation=-18, ha='left', fontsize=9, color='white')
     ax_c.tick_params(axis='y', colors='white', labelsize=9)
     ax_c.tick_params(axis='x', colors='white')
-    ax_c.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.0f%%'))
-    ax_c.set_ylabel('% Cobertura', color='white', fontsize=10)
+    ax_c.yaxis.set_major_formatter(
+        mtick.FormatStrFormatter('%.0f%%') if val_suf == '%'
+        else mtick.FuncFormatter(lambda v, _: f'{v:.1f}')
+    )
+    ax_c.set_ylabel(y_label, color='white', fontsize=10)
     ax_c.yaxis.grid(True, color='#1a2f5a', lw=0.7)
     ax_c.set_axisbelow(True)
     for sp in ax_c.spines.values():
@@ -310,12 +324,12 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
         transform=ax_s.transAxes,
     ))
     kw = dict(ha='center', transform=ax_s.transAxes)
-    ax_s.text(0.5, 0.95, 'RESUMEN',         color=mpl_bd, fontsize=7.5, fontweight='bold', va='top', **kw)
-    ax_s.text(0.5, 0.87, 'META',            color=mpl_bd, fontsize=8,   va='top', **kw)
-    ax_s.text(0.5, 0.77, f'{thr_val:.0f}%', color=mpl_bd, fontsize=20,  fontweight='bold', va='top', **kw)
+    ax_s.text(0.5, 0.95, 'RESUMEN',                   color=mpl_bd, fontsize=7.5, fontweight='bold', va='top', **kw)
+    ax_s.text(0.5, 0.87, 'META',                      color=mpl_bd, fontsize=8,   va='top', **kw)
+    ax_s.text(0.5, 0.77, f'{thr_val:.0f}{val_suf}',   color=mpl_bd, fontsize=20,  fontweight='bold', va='top', **kw)
     ax_s.plot([0.12, 0.88], [0.62, 0.62], color=(1,1,1,0.18), lw=0.8, transform=ax_s.transAxes)
-    ax_s.text(0.5, 0.60, 'LOGRO DIRESA',    color=(1,1,1,0.8), fontsize=7, va='top', **kw)
-    ax_s.text(0.5, 0.50, f'{pct_dir:.1f}%', color=mpl_cd, fontsize=18, fontweight='bold', va='top', **kw)
+    ax_s.text(0.5, 0.60, 'LOGRO DIRESA',              color=(1,1,1,0.8), fontsize=7, va='top', **kw)
+    ax_s.text(0.5, 0.50, f'{pct_dir:.1f}{val_suf}',   color=mpl_cd, fontsize=18, fontweight='bold', va='top', **kw)
     ax_s.plot([0.12, 0.88], [0.36, 0.36], color=(1,1,1,0.18), lw=0.8, transform=ax_s.transAxes)
     ax_s.text(0.5, 0.33, 'PROG',            color=(1,1,1,0.55), fontsize=7.5, va='top', **kw)
     ax_s.text(0.5, 0.24, f'{den_total:,}',  color='white', fontsize=11, fontweight='bold', va='top', **kw)
@@ -362,9 +376,9 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
 
     if thr_val > 0:
         items = [
-            (SEMAFORO['verde'],    f'En meta (>= {thr_val:.0f}%)'),
-            (SEMAFORO['amarillo'], f'Cerca (>= {thr_val*0.8:.0f}%)'),
-            (SEMAFORO['rojo'],     f'Bajo meta (< {thr_val*0.8:.0f}%)'),
+            (SEMAFORO['verde'],    f'En meta (>= {thr_val:.0f}{val_suf})'),
+            (SEMAFORO['amarillo'], f'Cerca (>= {thr_val*0.8:.0f}{val_suf})'),
+            (SEMAFORO['rojo'],     f'Bajo meta (< {thr_val*0.8:.0f}{val_suf})'),
         ]
         xp = 0.01
         for hx, lbl in items:
@@ -384,7 +398,7 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
         xp += 0.15
         ax_l.plot([xp, xp+0.04], [0.5, 0.5],
                   color='#FFB703', ls='--', lw=2, transform=ax_l.transAxes)
-        ax_l.text(xp+0.05, 0.5, f'META {thr_val:.0f}%',
+        ax_l.text(xp+0.05, 0.5, f'META {thr_val:.0f}{val_suf}',
                   color='#8892a4', fontsize=7.5, va='center',
                   transform=ax_l.transAxes)
 
@@ -474,15 +488,6 @@ st.markdown(f"""
     </p>
   </div>
 </div>""", unsafe_allow_html=True)
-
-# Ficha 15 siempre muestra mensaje especial — no aplica comparativo por red
-if fid == '15':
-    st.info(
-        '🏥 **Ficha 15 — Mamografía bilateral de tamizaje**\n\n'
-        'Este indicador se mide únicamente a nivel **departamental** en el '
-        '**Hospital Departamental de Huancavelica**. No aplica comparativo por Red de Salud.'
-    )
-    st.stop()
 
 if 'red' not in df_base.columns or not df_base['red'].str.len().gt(0).any():
     if fid == '16':
@@ -733,25 +738,44 @@ agg = (df_con_red
        .groupby('red')
        .agg(den=('den', 'sum'), num=('num', 'sum'))
        .reset_index())
-# Para tipo='promedio' el valor es num/den (no ×100); para tipo='pct' es num/den×100
-_es_prom = (tipo != 'pct')
-if _es_prom:
+# Detectar tipo de indicador
+_es_prom   = (tipo == 'promedio')
+_es_tasa   = (tipo == 'tasa')
+_es_no_pct = _es_prom or _es_tasa
+
+# Ficha 15: renombrar "HUANCAVELICA" → "Hospital Dep. HVCA" en la red
+if fid == '15':
+    agg['red'] = agg['red'].str.replace('HUANCAVELICA', 'Hospital Dep. HVCA', regex=False)
+
+# Para promedio/tasa el valor es num/den (sin ×100); para pct es num/den×100
+if _es_no_pct:
     agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'], 0).round(2)
 else:
     agg['pct'] = np.where(agg['den'] > 0, agg['num'] / agg['den'] * 100, 0).round(1)
 
 den_total = int(df_base['den'].sum())
 num_total = int(df_base['num'].sum())
-if _es_prom:
+if _es_no_pct:
     pct_total = round(num_total / den_total, 2) if den_total > 0 else 0
 else:
     pct_total = round(num_total / den_total * 100, 1) if den_total > 0 else 0
 thr = (logro or 0) * 100
 
-# Sufijo y etiqueta del eje Y según tipo de indicador
-_val_suf = f' {unidad}' if _es_prom else '%'
-_y_label = f'Promedio ({unidad})' if _es_prom else '% Cobertura'
-_val_fmt = '.2f' if _es_prom else '.1f'
+# Parámetros de visualización según tipo
+if _es_prom:
+    _val_suf = f' {unidad}'
+    _y_label = f'Promedio ({unidad})'
+    _val_fmt = '.2f'
+elif _es_tasa:
+    _umb_t  = INDICADORES.get(fid, {}).get('umbral', 10)
+    _lgr_t  = INDICADORES.get(fid, {}).get('logro_tasa', 100)
+    _val_suf = ''
+    _y_label = 'Tasa (×10,000)'
+    _val_fmt = '.1f'
+else:
+    _val_suf = '%'
+    _y_label = '% Cobertura'
+    _val_fmt = '.1f'
 
 # ── Calcular color por barra — ANTES del sort ─────────────────────────────────
 if tiene_meta_escalonada:
@@ -762,6 +786,15 @@ if tiene_meta_escalonada:
     agg['meta_txt']   = agg.apply(
         lambda r: f"Meta: {r['logro_red']:.0f}% (Umbral: {r['umbral_red']:.0f}%)", axis=1)
     u_diresa, l_diresa = get_meta_escalonada(den_total)
+elif _es_tasa:
+    agg['color']      = [
+        SEMAFORO['verde'] if p >= _lgr_t
+        else (SEMAFORO['amarillo'] if p >= _umb_t else SEMAFORO['rojo'])
+        for p in agg['pct']
+    ]
+    agg['logro_red']  = _lgr_t
+    agg['umbral_red'] = _umb_t
+    agg['meta_txt']   = agg['pct'].apply(lambda p: f'Tasa: {p:.1f} | Meta≥{_lgr_t:.0f} Umbral≥{_umb_t:.0f}')
 else:
     agg['color']      = [_color_fijo(p) for p in agg['pct']]
     agg['logro_red']  = thr
@@ -782,9 +815,9 @@ y_max_raw = max(
     pct_total,
     agg['logro_red'].max() if not agg.empty else 0,
 )
-DY   = max(y_max_raw * 0.042, 0.05 if _es_prom else 2.0)
+DY   = max(y_max_raw * 0.042, 0.05 if _es_no_pct else 2.0)
 y_max = (y_max_raw + DY) * 1.30
-if not _es_prom:
+if not _es_no_pct:
     y_max = max(y_max, 25)
 
 # ── Construcción del gráfico 3D ───────────────────────────────────────────────
@@ -809,7 +842,9 @@ fig.add_trace(go.Bar(
     ]),
     hovertemplate=(
         '<b>%{x}</b><br>'
-        + (f'Promedio: <b>%{{y:.2f}} {unidad}</b><br>' if _es_prom else 'Cobertura: <b>%{y:.1f}%</b><br>')
+        + (f'Promedio: <b>%{{y:.2f}} {unidad}</b><br>' if _es_prom
+           else ('Tasa: <b>%{y:.1f}</b><br>' if _es_tasa
+                 else 'Cobertura: <b>%{y:.1f}%</b><br>'))
         + '%{customdata[4]}<br>'
         'PROG: %{customdata[0]:,}<br>'
         'EJEC: %{customdata[1]:,}<br>'
@@ -869,7 +904,7 @@ fig.add_hline(
     line_dash='dot',
     line_color='rgba(100,180,255,0.8)',
     line_width=2,
-    annotation_text=f'  DIRESA: {pct_total:{_val_fmt[1:]}}{_val_suf}',
+    annotation_text=f'  DIRESA: {pct_total:{_val_fmt}}{_val_suf}',
     annotation_position='top right',
     annotation_font=dict(color='rgba(100,180,255,1)', size=12),
 )
@@ -883,6 +918,25 @@ if logro and tipo == 'pct' and not tiene_meta_escalonada:
         annotation_text=f'  META: {thr:.0f}%',
         annotation_position='top left',
         annotation_font=dict(color='#FFB703', size=14, family='Inter'),
+    )
+elif _es_tasa:
+    fig.add_hline(
+        y=_lgr_t,
+        line_dash='dash',
+        line_color='#FFB703',
+        line_width=2.5,
+        annotation_text=f'  META: {_lgr_t:.0f}',
+        annotation_position='top left',
+        annotation_font=dict(color='#FFB703', size=14, family='Inter'),
+    )
+    fig.add_hline(
+        y=_umb_t,
+        line_dash='dashdot',
+        line_color='rgba(255,183,3,0.55)',
+        line_width=1.8,
+        annotation_text=f'  UMBRAL: {_umb_t:.0f}',
+        annotation_position='top right',
+        annotation_font=dict(color='rgba(255,183,3,0.8)', size=11),
     )
 
 for idx in range(len(agg)):
@@ -915,7 +969,7 @@ fig.update_layout(
         title=_y_label,
         range=[0, y_max],
         gridcolor='rgba(255,255,255,0.07)',
-        ticksuffix='' if _es_prom else '%',
+        ticksuffix='' if _es_no_pct else '%',
         tickfont=dict(size=11),
     ),
     bargap=0.30,
@@ -938,6 +992,19 @@ with col_box:
   </div>
   <div style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin:2px 0;">
     Umbral: {u_d*100:.0f}%
+  </div>"""
+        border_color = '#FFB703'
+    elif _es_tasa:
+        color_diresa = (SEMAFORO['verde'] if pct_total >= _lgr_t
+                        else (SEMAFORO['amarillo'] if pct_total >= _umb_t
+                              else SEMAFORO['rojo']))
+        meta_box_html = f"""
+  <div style="color:#FFB703;font-size:0.75rem;margin:4px 0;">
+    <b>META (Tasa)</b><br>
+    <span style="font-size:1.3rem;font-weight:900;">{_lgr_t:.0f}</span>
+  </div>
+  <div style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin:2px 0;">
+    Umbral: {_umb_t:.0f}
   </div>"""
         border_color = '#FFB703'
     elif logro and tipo == 'pct':
@@ -966,7 +1033,7 @@ with col_box:
   {meta_box_html}
   <hr style="border-color:rgba(255,255,255,0.15);margin:8px 0;">
   <div style="color:rgba(255,255,255,0.8);font-size:0.78rem;margin:4px 0;">
-    <b>{'PROMEDIO' if _es_prom else 'LOGRO'} DIRESA</b><br>
+    <b>{'PROMEDIO' if _es_prom else ('TASA' if _es_tasa else 'LOGRO')} DIRESA</b><br>
     <span style="font-size:1.4rem;font-weight:900;color:{logro_color};">
       {pct_total:{_val_fmt}}{_val_suf}
     </span> {emoji_diresa}
@@ -1010,13 +1077,20 @@ if tiene_meta_escalonada:
         )
         for c in bar_colors
     ]
+elif _es_tasa:
+    tbl['estado'] = tbl['pct'].apply(
+        lambda p: '🟢 En meta' if p >= _lgr_t
+        else ('🟡 Cerca' if p >= _umb_t else '🔴 Bajo meta')
+    )
 elif logro and tipo == 'pct':
     tbl['estado'] = tbl['pct'].apply(
         lambda p: '🟢 En meta' if p >= thr
         else ('🟡 Cerca' if p >= thr * 0.80 else '🔴 Bajo meta')
     )
 
-_col_val = f'Promedio ({unidad})' if _es_prom else 'Cobertura %'
+_col_val = (f'Promedio ({unidad})' if _es_prom
+            else ('Tasa (×10,000)' if _es_tasa
+                  else 'Cobertura %'))
 tbl = tbl.rename(columns={
     'rank': '#', 'red': 'Red de Salud',
     'pct': _col_val, 'den': 'PROG', 'num': 'EJEC',
@@ -1035,6 +1109,11 @@ if tiene_meta_escalonada:
         ' En meta' if color_diresa == SEMAFORO['verde']
         else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Bajo meta')
     )
+elif _es_tasa:
+    fila_d['Estado'] = emoji_diresa + (
+        ' En meta' if color_diresa == SEMAFORO['verde']
+        else (' Cerca' if color_diresa == SEMAFORO['amarillo'] else ' Bajo meta')
+    )
 elif logro and tipo == 'pct':
     c_d = _color_fijo(pct_total)
     fila_d['Estado'] = _emoji_from_color(c_d) + (
@@ -1044,7 +1123,9 @@ elif logro and tipo == 'pct':
 
 tbl_display = pd.concat([tbl, pd.DataFrame([fila_d])], ignore_index=True)
 
-_val_col_fmt = '%.2f hrs' if _es_prom else '%.1f%%'
+_val_col_fmt = ('%.2f hrs' if _es_prom
+                else ('%.1f' if _es_tasa
+                      else '%.1f%%'))
 col_cfg = {
     '#':            st.column_config.TextColumn('#', width='small'),
     'Red de Salud': st.column_config.TextColumn('Red de Salud', width='large'),
@@ -1068,6 +1149,16 @@ if logro and tipo == 'pct' and not tiene_meta_escalonada:
   <span style="color:rgba(100,180,255,0.8);">― ― DIRESA total</span>
   <span style="color:#FFB703;">--- META {thr:.0f}%</span>
 </div>""", unsafe_allow_html=True)
+elif _es_tasa:
+    st.markdown(f"""
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:0.8rem;color:#8892a4;">
+  <span>🟢 En meta (tasa ≥ {_lgr_t:.0f})</span>
+  <span>🟡 Cerca (tasa ≥ {_umb_t:.0f})</span>
+  <span>🔴 Bajo umbral (tasa &lt; {_umb_t:.0f})</span>
+  <span style="color:rgba(100,180,255,0.8);">― ― DIRESA total</span>
+  <span style="color:#FFB703;">--- META tasa {_lgr_t:.0f}</span>
+  <span style="color:rgba(255,183,3,0.6);">-·- UMBRAL tasa {_umb_t:.0f}</span>
+</div>""", unsafe_allow_html=True)
 elif tiene_meta_escalonada:
     st.markdown("""
 <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:0.8rem;color:#8892a4;">
@@ -1089,7 +1180,10 @@ _titulo_tbl    = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red
 with exp_col1:
     st.download_button(
         label='🖼️ Descargar Gráfico JPG',
-        data=_chart_jpg_bytes(agg, bar_colors, thr, pct_total, _titulo_export),
+        data=_chart_jpg_bytes(agg, bar_colors,
+                              _lgr_t if _es_tasa else thr,
+                              pct_total, _titulo_export,
+                              val_suf=_val_suf, y_label=_y_label),
         file_name=f'comparativo_red_{fid}_2026.jpg',
         mime='image/jpeg',
         use_container_width=True,
@@ -1117,7 +1211,9 @@ with exp_col3:
         ws = writer.sheets['Comparativo por Red']
         ws['A1'] = f'DIRESA HUANCAVELICA — Comparativo por Red — Indicador {fid}'
         ws['A2'] = ficha['titulo']
-        ws['A3'] = f'Año: 2026    PROG: {den_total:,}    EJEC: {num_total:,}    Cobertura DIRESA: {pct_total:.1f}%'
+        _lbl3 = 'Tasa' if _es_tasa else ('Promedio' if _es_prom else 'Cobertura')
+        _sfx3 = '' if _es_no_pct else '%'
+        ws['A3'] = f'Año: 2026    PROG: {den_total:,}    EJEC: {num_total:,}    {_lbl3} DIRESA: {pct_total:.1f}{_sfx3}'
         ws.column_dimensions['A'].width = 6
         ws.column_dimensions['B'].width = 30
         ws.column_dimensions['C'].width = 14
@@ -1146,7 +1242,7 @@ with exp_col3:
                 cell.alignment = Alignment(
                     horizontal='center' if col_i != 1 else 'left', vertical='center')
         total_row = n_rows + 5
-        total_data = ['', 'DIRESA HUANCAVELICA', den_total, num_total, f'{pct_total:.1f}%', '']
+        total_data = ['', 'DIRESA HUANCAVELICA', den_total, num_total, f'{pct_total:.1f}{"" if _es_no_pct else "%"}', '']
         for col_i, val in enumerate(total_data, start=1):
             c = ws.cell(row=total_row, column=col_i, value=val)
             c.font = Font(bold=True, size=11, color='FFFFFF')
@@ -1165,8 +1261,11 @@ with exp_col3:
 st.download_button(
     label='🖥️ Descargar Vista Completa JPG',
     data=_full_jpg_bytes(
-        agg, bar_colors, thr, pct_total, den_total, num_total,
+        agg, bar_colors,
+        _lgr_t if _es_tasa else thr,
+        pct_total, den_total, num_total,
         tbl_display, fid, ficha['titulo'], color_diresa,
+        val_suf=_val_suf, y_label=_y_label,
     ),
     file_name=f'vista_completa_{fid}_2026.jpg',
     mime='image/jpeg',
