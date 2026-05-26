@@ -157,6 +157,12 @@ def load_ficha(file, filename: str) -> dict | None:
         if minsa_mask.any():
             df_norm = df_norm[minsa_mask].reset_index(drop=True)
 
+    # Si no hay columna Red pero sí hay Provincia, usar Provincia como Red
+    # (aplica a Ficha 19 donde el nivel de análisis es provincia)
+    if not df_norm['red'].str.len().gt(0).any():
+        if df_norm['provincia'].str.len().gt(0).any():
+            df_norm['red'] = df_norm['provincia']
+
     tipo      = meta.get('tipo', 'pct')   # 'pct' | 'promedio' | 'tasa'
     unidad    = meta.get('unidad', '%')   # '%' | 'hrs' | 'x10k'
     umbral    = meta.get('umbral', None)

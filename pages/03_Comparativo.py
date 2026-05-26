@@ -73,7 +73,20 @@ st.markdown(f"""
 </div>""", unsafe_allow_html=True)
 
 if 'red' not in df_base.columns or not df_base['red'].str.len().gt(0).any():
-    st.warning('⚠️ Este indicador no tiene datos de Red de Salud.')
+    if fid == '15':
+        st.info(
+            '🏥 **Ficha 15 — Mamografía bilateral de tamizaje**\n\n'
+            'Este indicador se mide únicamente a nivel **departamental** '
+            '(Hospital Regional de Huancavelica). No aplica comparativo por Red de Salud.'
+        )
+    elif fid == '16':
+        st.info(
+            '💉 **Ficha 16 — Vacuna VPH**\n\n'
+            'La base de datos con desagregación por Red está pendiente de carga. '
+            'Sube la nueva base cuando esté disponible.'
+        )
+    else:
+        st.warning('⚠️ Este indicador no tiene datos de Red de Salud.')
     st.stop()
 
 # ── Agrupación por RED ────────────────────────────────────────────────────────
