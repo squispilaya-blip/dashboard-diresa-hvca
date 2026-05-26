@@ -229,15 +229,15 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
     mpl_bd = _to_mpl_color(bd_col)
 
     fig_w   = max(16, n * 1.9)
-    tbl_h_i = max(2.8, n_t * 0.40 + 1.4)
-    fig_h   = 1.4 + 5.5 + tbl_h_i + 0.55
+    tbl_h_i = max(2.5, n_t * 0.38 + 1.0)
+    fig_h   = 0.9 + 5.5 + tbl_h_i + 0.42
 
     fig = plt.figure(figsize=(fig_w, fig_h), facecolor='#0d1b35')
     gs  = GridSpec(
         4, 6, figure=fig,
-        height_ratios=[1.4, 5.5, tbl_h_i, 0.55],
-        hspace=0.18, wspace=0.10,
-        left=0.04, right=0.98, top=0.97, bottom=0.02,
+        height_ratios=[0.9, 5.5, tbl_h_i, 0.42],
+        hspace=0.04, wspace=0.10,
+        left=0.04, right=0.98, top=0.98, bottom=0.02,
     )
 
     # ── Header ────────────────────────────────────────────────────────────────
@@ -388,7 +388,6 @@ def _full_jpg_bytes(df_agg: pd.DataFrame, colors: list,
                   color='#8892a4', fontsize=7.5, va='center',
                   transform=ax_l.transAxes)
 
-    plt.tight_layout(pad=0.5)
     buf = io.BytesIO()
     fig.savefig(buf, format='jpeg', dpi=150, bbox_inches='tight',
                 facecolor='#0d1b35', edgecolor='none')
