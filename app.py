@@ -2,6 +2,7 @@ import hashlib
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+# DATA: HISMINSA 24/05/2026 | FILTRO: solo MINSA
 
 import streamlit as st
 import pandas as pd
