@@ -247,10 +247,12 @@ if is_admin():
         st.info("""
 **¿Cómo actualizar el dashboard?**
 1. Descarga los reportes desde el [Portal de Indicadores DIRESA Huancavelica](https://sites.google.com/saludhuancavelica.pe/indicadores-diresa-hvca/indicadores-de-desempe%C3%B1o-minsa)
-2. Cárgalos aquí — todos los usuarios verán los nuevos datos
-3. ¡El dashboard se actualiza automáticamente!
+2. Cárgalos aquí — todos los usuarios verán los nuevos datos de inmediato.
 
-Puedes cargar múltiples archivos a la vez.
+⚠️ **Esta carga es temporal.** Vive en la memoria del servidor: cuando la app
+se duerme o se reinicia, vuelve al último mes guardado en la carpeta `data/`
+del repositorio. Para que el mes quede **fijo**, los Excel deben subirse a
+`dashboard_hvca/data/` en GitHub (ver `data/README.md`).
 """)
         if _shared:
             if st.button('🗑️ Limpiar todos los datos cargados', type='secondary',
@@ -307,6 +309,9 @@ Puedes cargar múltiples archivos a la vez.
             _set_meta(_shared, st.session_state.get('usuario', 'Admin'))
             st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s). '
                        f'Todos los usuarios ya pueden ver los datos.')
+            st.warning('⚠️ Carga temporal: se pierde al reiniciarse el servidor. '
+                       'Para dejarla fija, sube los Excel a `dashboard_hvca/data/` '
+                       'en GitHub.')
         if errores:
             st.warning(f'⚠️ {len(errores)} archivo(s) no reconocido(s) '
                        f'(el nombre debe incluir "Ficha_NN").')

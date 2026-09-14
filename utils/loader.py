@@ -251,7 +251,12 @@ def load_ficha(file, filename: str) -> dict | None:
 
     # Ficha 16 tiene formato especial (monitoreo diario vacunación)
     if ficha_id == '16':
-        return _load_ficha_16_vph(xl, meta)
+        # El archivo de monitoreo diario trae hoja COMPARATIVO (desagregado por RIS).
+        # El reporte oficial DL 1153 no la trae: en ese caso seguimos con el loader
+        # estandar en vez de descartar la ficha.
+        especial = _load_ficha_16_vph(xl, meta)
+        if especial is not None:
+            return especial
 
     # Leer Hoja1 para extraer logro y título
     try:
