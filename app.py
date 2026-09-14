@@ -6,7 +6,7 @@ from datetime import datetime
 
 import streamlit as st
 import pandas as pd
-from utils.loader import load_ficha_bytes, get_semaforo_color
+from utils.loader import load_ficha_bytes, get_semaforo_color, periodo_datos
 from utils.auth import (do_login, is_authenticated, is_admin,
                         list_users, add_user, delete_user)
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
@@ -78,7 +78,20 @@ def _hash_cache() -> dict:
 @st.cache_resource
 def _shared_meta() -> dict:
     """Metadatos de la última carga: fecha, cantidad de fichas, usuario."""
-    return {'fecha': None, 'fichas_n': 0, 'usuario': ''}
+    return {'fecha': None, 'periodo': '', 'fichas_n': 0, 'usuario': ''}
+
+
+def _set_meta(shared: dict, usuario: str) -> None:
+    """Unico punto que escribe los metadatos del banner.
+
+    'periodo' = meses reales de los datos; 'fecha' = cuando se cargaron
+    los archivos al servidor. Son cosas distintas y se muestran distinto.
+    """
+    meta = _shared_meta()
+    meta['periodo']  = periodo_datos(shared)
+    meta['fecha']    = datetime.now().strftime('%d/%m/%Y a las %H:%M')
+    meta['fichas_n'] = len(shared)
+    meta['usuario']  = usuario
 
 @st.cache_resource
 def _shared_fichas() -> dict:
@@ -90,10 +103,7 @@ def _shared_fichas() -> dict:
     hcache = _hash_cache()
     n = _auto_load_from_data_dir(shared, hcache)
     if n > 0:
-        meta = _shared_meta()
-        meta['fecha']    = datetime.now().strftime('%d/%m/%Y a las %H:%M')
-        meta['fichas_n'] = n
-        meta['usuario']  = 'Sistema (auto-carga)'
+        _set_meta(shared, 'Sistema (auto-carga)')
     return shared
 
 
@@ -294,11 +304,7 @@ Puedes cargar múltiples archivos a la vez.
         if nuevas:        partes.append(f'{nuevas} nuevo(s)')
         if desde_cache:   partes.append(f'{desde_cache} ya procesado(s) — sin reprocesar')
         if partes:
-            # Guardar metadatos de la última actualización
-            meta = _shared_meta()
-            meta['fecha']    = datetime.now().strftime('%d/%m/%Y a las %H:%M')
-            meta['fichas_n'] = len(_shared)
-            meta['usuario']  = st.session_state.get('usuario', 'Admin')
+            _set_meta(_shared, st.session_state.get('usuario', 'Admin'))
             st.success(f'✅ {" · ".join(partes)} indicador(es) cargado(s). '
                        f'Todos los usuarios ya pueden ver los datos.')
         if errores:
@@ -313,20 +319,22 @@ meta = _shared_meta()
 
 # ── Banda: última actualización ───────────────────────────────────
 if meta['fecha']:
+    _periodo = meta.get('periodo') or 'periodo no identificado'
     st.markdown(f"""
 <div style="display:flex;align-items:center;gap:14px;
             background:rgba(0,132,61,0.12);border:1.5px solid #00843D;
             border-radius:12px;padding:12px 20px;margin-bottom:18px;">
-  <div style="font-size:1.8rem">🕐</div>
+  <div style="font-size:1.8rem">📅</div>
   <div>
     <div style="color:#2DC653;font-weight:700;font-size:0.85rem;
                 text-transform:uppercase;letter-spacing:0.06em;">
-      Última actualización de datos</div>
+      Datos disponibles</div>
     <div style="color:#E8EAF0;font-size:1rem;font-weight:600;">
-      {meta['fecha']} &nbsp;·&nbsp; {meta['fichas_n']} indicadores cargados</div>
+      {_periodo} &nbsp;·&nbsp; {meta['fichas_n']} indicadores cargados</div>
     <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px;">
-      📅 Los datos se actualizan el <b style="color:rgba(255,255,255,0.75);">
-      15 de cada mes</b> con los reportes oficiales del portal MINSA.</div>
+      🕐 Archivos cargados al sistema el <b style="color:rgba(255,255,255,0.75);">
+      {meta['fecha']}</b> · los reportes oficiales del portal MINSA se publican
+      el 15 de cada mes.</div>
   </div>
 </div>""", unsafe_allow_html=True)
 else:

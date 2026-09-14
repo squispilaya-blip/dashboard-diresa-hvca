@@ -2,7 +2,7 @@ import io
 import re
 import pandas as pd
 import numpy as np
-from utils.constants import COLUMN_MAP, INDICADORES, SEMAFORO
+from utils.constants import COLUMN_MAP, INDICADORES, SEMAFORO, MESES
 
 
 def detect_ficha_id(filename: str) -> str | None:
@@ -68,6 +68,29 @@ def normalize_df(df: pd.DataFrame, ficha_id: str) -> pd.DataFrame:
     result['edad'] = s.where(~s.isin(_NAN_VALS), '')
     result['ficha_id'] = ficha_id
     return result.reset_index(drop=True)
+
+
+def periodo_datos(fichas: dict) -> str:
+    """Periodo REAL que cubren los datos cargados, p.ej. 'Enero - Mayo 2026'.
+
+    Se deriva de las columnas mes/anio de las fichas, nunca de la fecha del
+    servidor: la app puede reiniciarse en setiembre con datos que llegan a mayo.
+    """
+    meses, anios = set(), set()
+    for f in fichas.values():
+        df = f.get('df')
+        if df is None or 'mes' not in df.columns:
+            continue
+        m = pd.to_numeric(df['mes'], errors='coerce')
+        meses |= set(m[m.between(1, 12)].astype(int))
+        if 'año' in df.columns:
+            a = pd.to_numeric(df['año'], errors='coerce')
+            anios |= set(a[a > 2000].astype(int))
+    if not meses:
+        return ''
+    anio = f' {max(anios)}' if anios else ''
+    ini, fin = MESES[min(meses)], MESES[max(meses)]
+    return f'{ini}{anio}' if ini == fin else f'{ini} - {fin}{anio}'
 
 
 def get_semaforo_color(pct: float, logro: float | None) -> str:

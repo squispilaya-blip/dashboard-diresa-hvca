@@ -2,7 +2,8 @@ import pytest
 import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from utils.loader import detect_ficha_id, extract_logro, normalize_df, get_semaforo_color
+from utils.loader import (detect_ficha_id, extract_logro, normalize_df,
+                          get_semaforo_color, periodo_datos)
 
 class TestDetectFichaId:
     def test_detecta_01(self):
@@ -76,3 +77,21 @@ class TestSemaforoColor:
 
     def test_rojo_cuando_logro_none_y_sin_avance(self):
         assert get_semaforo_color(0.0, None) == 'rojo'
+
+
+class TestPeriodoDatos:
+    def _ficha(self, meses, anio=2026):
+        return {'df': pd.DataFrame({'mes': meses, 'año': [anio] * len(meses)})}
+
+    def test_rango_de_varias_fichas(self):
+        fichas = {'01': self._ficha([1, 2, 3]), '02': self._ficha([4, 5])}
+        assert periodo_datos(fichas) == 'Enero - Mayo 2026'
+
+    def test_un_solo_mes(self):
+        assert periodo_datos({'16': self._ficha([5])}) == 'Mayo 2026'
+
+    def test_ignora_meses_invalidos(self):
+        assert periodo_datos({'01': self._ficha([0, 5, 99])}) == 'Mayo 2026'
+
+    def test_sin_datos_retorna_vacio(self):
+        assert periodo_datos({}) == ''
