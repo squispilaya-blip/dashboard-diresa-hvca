@@ -3,7 +3,7 @@ import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loader import (detect_ficha_id, extract_logro, normalize_df,
-                          get_semaforo_color, periodo_datos)
+                          get_semaforo_color, periodo_datos, anio_datos)
 
 class TestDetectFichaId:
     def test_detecta_01(self):
@@ -95,3 +95,17 @@ class TestPeriodoDatos:
 
     def test_sin_datos_retorna_vacio(self):
         assert periodo_datos({}) == ''
+
+
+class TestAnioDatos:
+    def test_toma_el_anio_del_dato(self):
+        df = pd.DataFrame({'mes': [1, 2], 'año': [2031, 2031]})
+        assert anio_datos(df) == 2031
+
+    def test_ignora_anios_basura(self):
+        df = pd.DataFrame({'mes': [1, 2], 'año': [0, 2027]})
+        assert anio_datos(df) == 2027
+
+    def test_sin_columna_cae_al_anio_en_curso(self):
+        from datetime import datetime
+        assert anio_datos(pd.DataFrame({'mes': [1]})) == datetime.now().year

@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.auth import require_auth
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
 from utils.constants import SEMAFORO, COLORS, INDICADORES
+from utils.loader import anio_datos
 
 st.set_page_config(
     page_title='Comparativo por Red',
@@ -434,6 +435,7 @@ if not fichas:
 
 ficha   = fichas[fid]
 df_base = ficha['df']
+_ANIO   = anio_datos(df_base)
 logro   = ficha.get('logro')
 tipo    = ficha.get('tipo', 'pct')
 unidad  = ficha.get('unidad', '%')
@@ -484,7 +486,7 @@ st.markdown(f"""
       {ficha['icono']}&nbsp; {ficha['titulo']}
     </h1>
     <p style="font-size:0.82rem;opacity:0.65;margin:0;">
-      DIRESA Huancavelica &nbsp;·&nbsp; 2026 &nbsp;·&nbsp; Solo MINSA
+      DIRESA Huancavelica &nbsp;·&nbsp; {_ANIO} &nbsp;·&nbsp; Solo MINSA
     </p>
   </div>
 </div>""", unsafe_allow_html=True)
@@ -537,7 +539,7 @@ if sub_grupos:
 
             fg = go.Figure()
             fg.add_trace(go.Bar(
-                name='Cobertura 2026',
+                name=f'Cobertura {_ANIO}',
                 x=agg_g['red'], y=agg_g['pct'],
                 marker=dict(color=bc_g, line=dict(color='rgba(255,255,255,0.25)', width=1.2)),
                 text=[''] * len(agg_g), width=0.55,
@@ -666,13 +668,13 @@ if sub_grupos:
             # Exportar
             st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_html=True)
             _cat_key = sg['categoria'].replace(' ', '_')
-            _titulo_g = f'DIRESA Huancavelica · VPH {sg["categoria"]} · por Red · 2026'
+            _titulo_g = f'DIRESA Huancavelica · VPH {sg["categoria"]} · por Red · {_ANIO}'
             eg1, eg2, eg3 = st.columns(3)
             with eg1:
                 st.download_button(
                     label='🖼️ Descargar Gráfico JPG',
                     data=_chart_jpg_bytes(agg_g, bc_g, sg_thr, pct_g, sg['titulo']),
-                    file_name=f'vph_{_cat_key.lower()}_2026.jpg',
+                    file_name=f'vph_{_cat_key.lower()}_{_ANIO}.jpg',
                     mime='image/jpeg',
                     use_container_width=True,
                     key=f'btn_chart_vph_{_cat_key}',
@@ -681,7 +683,7 @@ if sub_grupos:
                 st.download_button(
                     label='📋 Descargar Tabla JPG',
                     data=_table_jpg_bytes(tbl_d_g, _titulo_g),
-                    file_name=f'tabla_vph_{_cat_key.lower()}_2026.jpg',
+                    file_name=f'tabla_vph_{_cat_key.lower()}_{_ANIO}.jpg',
                     mime='image/jpeg',
                     use_container_width=True,
                     key=f'btn_tbl_vph_{_cat_key}',
@@ -693,7 +695,7 @@ if sub_grupos:
                         agg_g, bc_g, sg_thr, pct_g, den_g, num_g,
                         tbl_d_g, fid, sg['titulo'], cc_d,
                     ),
-                    file_name=f'vista_completa_vph_{_cat_key.lower()}_2026.jpg',
+                    file_name=f'vista_completa_vph_{_cat_key.lower()}_{_ANIO}.jpg',
                     mime='image/jpeg',
                     use_container_width=True,
                     key=f'btn_full_vph_{_cat_key}',
@@ -725,7 +727,7 @@ if sub_grupos:
             st.download_button(
                 label='📊 Descargar Tabla Excel',
                 data=out_g.getvalue(),
-                file_name=f'tabla_vph_{_cat_key.lower()}_2026.xlsx',
+                file_name=f'tabla_vph_{_cat_key.lower()}_{_ANIO}.xlsx',
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 use_container_width=True,
                 key=f'btn_xlsx_{_cat_key}',
@@ -839,7 +841,7 @@ if not _es_no_pct:
 fig = go.Figure()
 
 fig.add_trace(go.Bar(
-    name='Cobertura 2026',
+    name=f'Cobertura {_ANIO}',
     x=agg['red'],
     y=agg['pct'],
     marker=dict(
@@ -1233,7 +1235,7 @@ st.markdown('<div class="seccion-titulo">⬇️ Exportar</div>', unsafe_allow_ht
 exp_col1, exp_col2, exp_col3 = st.columns(3)
 
 _titulo_export = f'Indicador {fid} - {ficha["titulo"][:50]}'
-_titulo_tbl    = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · 2026'
+_titulo_tbl    = f'DIRESA Huancavelica · Indicador {fid} · Comparativo por Red · {_ANIO}'
 
 with exp_col1:
     st.download_button(
@@ -1242,7 +1244,7 @@ with exp_col1:
                               _lgr_t if _es_tasa else (_meta_max if _es_prom_max else thr),
                               pct_total, _titulo_export,
                               val_suf=_val_suf, y_label=_y_label),
-        file_name=f'comparativo_red_{fid}_2026.jpg',
+        file_name=f'comparativo_red_{fid}_{_ANIO}.jpg',
         mime='image/jpeg',
         use_container_width=True,
         key=f'btn_chart_{fid}',
@@ -1252,7 +1254,7 @@ with exp_col2:
     st.download_button(
         label='📋 Descargar Tabla JPG',
         data=_table_jpg_bytes(tbl_display, _titulo_tbl),
-        file_name=f'tabla_red_{fid}_2026.jpg',
+        file_name=f'tabla_red_{fid}_{_ANIO}.jpg',
         mime='image/jpeg',
         use_container_width=True,
         key=f'btn_tbl_{fid}',
@@ -1271,7 +1273,7 @@ with exp_col3:
         ws['A2'] = ficha['titulo']
         _lbl3 = 'Tasa' if _es_tasa else ('Promedio' if _es_prom else 'Cobertura')
         _sfx3 = (f' {unidad}' if _es_prom else ('') if _es_tasa else '%')
-        ws['A3'] = f'Año: 2026    PROG: {den_total:,}    EJEC: {num_total:,}    {_lbl3} DIRESA: {pct_total:.1f}{_sfx3}'
+        ws['A3'] = f'Año: {_ANIO}    PROG: {den_total:,}    EJEC: {num_total:,}    {_lbl3} DIRESA: {pct_total:.1f}{_sfx3}'
         ws.column_dimensions['A'].width = 6
         ws.column_dimensions['B'].width = 30
         ws.column_dimensions['C'].width = 14
@@ -1310,7 +1312,7 @@ with exp_col3:
     st.download_button(
         label='📊 Descargar Tabla Excel',
         data=output.getvalue(),
-        file_name=f'comparativo_red_{fid}_2026.xlsx',
+        file_name=f'comparativo_red_{fid}_{_ANIO}.xlsx',
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         use_container_width=True,
     )
@@ -1325,7 +1327,7 @@ st.download_button(
         tbl_display, fid, ficha['titulo'], color_diresa,
         val_suf=_val_suf, y_label=_y_label,
     ),
-    file_name=f'vista_completa_{fid}_2026.jpg',
+    file_name=f'vista_completa_{fid}_{_ANIO}.jpg',
     mime='image/jpeg',
     use_container_width=True,
     key=f'btn_full_{fid}',

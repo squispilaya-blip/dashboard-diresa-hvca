@@ -1,5 +1,6 @@
 import io
 import re
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from utils.constants import COLUMN_MAP, INDICADORES, SEMAFORO, MESES
@@ -93,6 +94,19 @@ def periodo_datos(fichas: dict) -> str:
     return f'{ini}{anio}' if ini == fin else f'{ini} - {fin}{anio}'
 
 
+def anio_datos(df) -> int:
+    """Anio de los datos (el mayor presente). Cae al anio en curso si no hay dato.
+
+    Evita que reportes y titulos queden con un anio escrito a mano.
+    """
+    if df is not None and 'año' in getattr(df, 'columns', []):
+        a = pd.to_numeric(df['año'], errors='coerce')
+        a = a[a > 2000]
+        if len(a):
+            return int(a.max())
+    return datetime.now().year
+
+
 def get_semaforo_color(pct: float, logro: float | None) -> str:
     if logro is None:
         return 'verde' if pct > 0 else 'rojo'
@@ -184,6 +198,9 @@ def _load_ficha_16_vph(xl, meta: dict) -> dict | None:
             continue
         # Normalizar nombres de Red al formato TITLE CASE
         red_fmt = red.title()
+        # ponytail: el archivo de monitoreo diario no trae anio ni mes en los
+        # datos, solo en el nombre de la hoja ('26 MAY'). Se fija 2026/mes 5.
+        # Si vuelve a usarse esta ruta en otro anio, hay que leer la hoja.
         rows.append({'red': red_fmt, 'den': m9,  'num': du9,  'categoria': '9 AÑOS',    'año': 2026, 'mes': 5})
         rows.append({'red': red_fmt, 'den': m18, 'num': du18, 'categoria': '10-18 AÑOS','año': 2026, 'mes': 5})
 

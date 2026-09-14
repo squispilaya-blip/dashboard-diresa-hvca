@@ -3,7 +3,7 @@ import streamlit as st
 import numpy as np
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from utils.loader import get_semaforo_color
+from utils.loader import get_semaforo_color, anio_datos
 from utils.charts import bar_chart_por_eess
 from utils.map_renderer import render_map
 from utils.exports import df_to_excel_bytes, build_pdf_bytes
@@ -259,12 +259,14 @@ with tabs[0]:
         _MESES_PDF = ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
                       'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
         _meses_datos = sorted(m for m in ficha['df']['mes'].unique() if 0 < m <= 12)
+        _anio = anio_datos(ficha['df'])
         if len(_meses_datos) >= 2:
-            _periodo = f'{_MESES_PDF[_meses_datos[0]]} - {_MESES_PDF[_meses_datos[-1]]} 2026'
+            _periodo = (f'{_MESES_PDF[_meses_datos[0]]} - '
+                        f'{_MESES_PDF[_meses_datos[-1]]} {_anio}')
         elif len(_meses_datos) == 1:
-            _periodo = f'{_MESES_PDF[_meses_datos[0]]} 2026'
+            _periodo = f'{_MESES_PDF[_meses_datos[0]]} {_anio}'
         else:
-            _periodo = '2026'
+            _periodo = str(_anio)
         st.download_button(
             '📄 Descargar PDF',
             data=build_pdf_bytes(df_f, ficha['titulo'], filtro_lbl,

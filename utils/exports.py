@@ -8,6 +8,8 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from fpdf import FPDF
 
+from utils.loader import anio_datos
+
 MESES_PDF = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
              7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'}
 
@@ -28,16 +30,18 @@ def df_to_excel_bytes(df: pd.DataFrame, titulo: str, filtro: str) -> bytes:
     ws['A1'] = f'DIRESA HUANCAVELICA — {titulo}'
     ws['A1'].font = Font(bold=True, color='003087', size=13)
     # MINOR-6: derivar periodo de los datos reales
+    anio_xl = anio_datos(df)
     if not df.empty and 'mes' in df.columns:
         meses_datos = sorted(df['mes'].dropna().unique().astype(int))
         if meses_datos:
             m_ini = MESES_PDF.get(meses_datos[0], str(meses_datos[0])).upper()
             m_fin = MESES_PDF.get(meses_datos[-1], str(meses_datos[-1])).upper()
-            periodo_excel = f'{m_ini} - {m_fin} 2026' if m_ini != m_fin else f'{m_ini} 2026'
+            periodo_excel = (f'{m_ini} - {m_fin} {anio_xl}' if m_ini != m_fin
+                             else f'{m_ini} {anio_xl}')
         else:
-            periodo_excel = '2026'
+            periodo_excel = str(anio_xl)
     else:
-        periodo_excel = '2026'
+        periodo_excel = str(anio_xl)
     ws['A2'] = f'Filtro: {filtro}  |  PERIODO: {periodo_excel}'
     ws['A2'].font = Font(italic=True, color='444444', size=10)
 
@@ -97,6 +101,7 @@ def build_pdf_bytes(df: pd.DataFrame, titulo: str, filtro: str,
     titulo    = _latin1(titulo)
     filtro    = _latin1(filtro.replace('›', '>').replace('→', '>'))
     logro_str = _latin1(logro_str)
+    anio      = anio_datos(df)
 
     pdf = FPDF()
     pdf.set_margins(6, 6, 6)
@@ -115,7 +120,7 @@ def build_pdf_bytes(df: pd.DataFrame, titulo: str, filtro: str,
     pdf.cell(210, 8, 'DIRESA HUANCAVELICA', align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', '', 8)
     pdf.set_x(0)
-    pdf.cell(210, 5, f'Indicadores de Desempeno DL 1153-2026  |  {periodo}',
+    pdf.cell(210, 5, f'Indicadores de Desempeno DL 1153-{anio}  |  {periodo}',
              align='C', new_x='LMARGIN', new_y='NEXT')
 
     # ── Título del indicador ────────────────────────────────────────────────
@@ -158,7 +163,7 @@ def build_pdf_bytes(df: pd.DataFrame, titulo: str, filtro: str,
         pdf.set_text_color(180, 0, 0)
         pdf.cell(198, 8, 'Sin datos para el filtro seleccionado.',
                  new_x='LMARGIN', new_y='NEXT')
-        _footer(pdf)
+        _footer(pdf, anio)
         return bytes(pdf.output())
 
     y_section = pdf.get_y()
@@ -287,7 +292,7 @@ def build_pdf_bytes(df: pd.DataFrame, titulo: str, filtro: str,
         pdf.ln()
         alt = not alt
 
-    _footer(pdf)
+    _footer(pdf, anio)
     return bytes(pdf.output())
 
 
@@ -303,9 +308,9 @@ def _table_header(pdf, TCOLS, THDRS, TWIDTHS):
     pdf.set_font('Helvetica', '', 6.5)
 
 
-def _footer(pdf):
+def _footer(pdf, anio):
     pdf.set_y(-12)
     pdf.set_font('Helvetica', 'I', 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, f'DIRESA Huancavelica - Sistema DL 1153-2026  |  Pagina {pdf.page_no()}',
+    pdf.cell(0, 5, f'DIRESA Huancavelica - Sistema DL 1153-{anio}  |  Pagina {pdf.page_no()}',
              align='C')

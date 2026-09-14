@@ -2,7 +2,7 @@ import hashlib
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-# DATA: HISMINSA 24/05/2026 | FILTRO: solo MINSA
+# DATA: HISMINSA 08/09/2026 (fichas 202608) | FILTRO: solo MINSA
 
 import streamlit as st
 import pandas as pd
@@ -10,6 +10,7 @@ from utils.loader import load_ficha_bytes, get_semaforo_color, periodo_datos
 from utils.auth import (do_login, is_authenticated, is_admin,
                         list_users, add_user, delete_user)
 from utils.ui import load_css, render_sidebar_brand, render_sidebar_logout
+from utils.constants import ANIO_EVAL
 
 # ── Ruta a la carpeta de datos pre-cargados ───────────────────────────────────
 _DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
@@ -111,7 +112,7 @@ def _shared_fichas() -> dict:
 #  PANTALLA DE LOGIN
 # ══════════════════════════════════════════════════════════════════
 if not is_authenticated():
-    st.markdown("""
+    st.markdown(f"""
     <div style="display:flex;justify-content:center;margin-top:60px;">
       <div style="background:linear-gradient(135deg,#112240,#1a3460);
                   border-radius:20px;padding:48px 52px;width:420px;
@@ -122,7 +123,7 @@ if not is_authenticated():
           <h2 style="color:#fff;font-weight:800;margin:8px 0 2px;font-size:1.35rem;">
             DIRESA Huancavelica</h2>
           <p style="color:rgba(255,255,255,0.5);font-size:0.78rem;margin:0;">
-            Sistema de Monitoreo · DL 1153 · 2026</p>
+            Sistema de Monitoreo · DL 1153 · {ANIO_EVAL}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -171,11 +172,11 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════
 #  CABECERA
 # ══════════════════════════════════════════════════════════════════
-st.markdown("""
+st.markdown(f"""
 <div class="header-diresa">
   <div>
     <h1>🏥 DIRESA Huancavelica</h1>
-    <p>Sistema de Monitoreo de Indicadores de Desempeño &nbsp;·&nbsp; D.L. 1153 &nbsp;·&nbsp; 2026</p>
+    <p>Sistema de Monitoreo de Indicadores de Desempeño &nbsp;·&nbsp; D.L. 1153 &nbsp;·&nbsp; {ANIO_EVAL}</p>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -268,7 +269,7 @@ del repositorio. Para que el mes quede **fijo**, los Excel deben subirse a
             'Selecciona las fichas Excel (Ficha_01, Ficha_02 … Ficha_32)',
             type=['xlsx'],
             accept_multiple_files=True,
-            help='Arrastra aquí los archivos Excel de indicadores DL 1153 2026',
+            help='Arrastra aquí los archivos Excel de indicadores DL 1153',
         )
 
     if uploaded:

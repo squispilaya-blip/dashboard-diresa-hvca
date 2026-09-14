@@ -7,6 +7,8 @@ Ahora: una sola definición aquí; cada página llama a las funciones.
 """
 import os
 import streamlit as st
+
+from utils.constants import ANIO_EVAL
 from utils.auth import do_logout
 
 
@@ -32,7 +34,7 @@ def render_sidebar_brand() -> None:
     st.markdown(f'''<div class="sb-brand">
       <div style="font-size:1.3rem">🏥</div>
       <div class="sb-brand-name">DIRESA<br>HUANCAVELICA</div>
-      <div class="sb-brand-sub">DL 1153 · 2026</div>
+      <div class="sb-brand-sub">DL 1153 · {ANIO_EVAL}</div>
       <div class="sb-user">👤 {st.session_state.get("user_name", "")}</div>
     </div>''', unsafe_allow_html=True)
 

@@ -120,6 +120,11 @@ PROVINCE_CENTROIDS = {
     'TAYACAJA':       {'lat': -12.395, 'lon': -74.858},
 }
 
+# Anio de evaluacion del DL 1153. Solo rotula la marca (login, cabecera,
+# barra lateral); los reportes y graficos leen el anio de los datos con
+# loader.anio_datos(). Al pasar a 2027 se cambia aqui, un solo sitio.
+ANIO_EVAL = 2026
+
 MESES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
          7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'}
 MESES_CORTO = {1:'Ene',2:'Feb',3:'Mar',4:'Abr',5:'May',6:'Jun',
